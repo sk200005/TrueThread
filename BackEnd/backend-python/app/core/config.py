@@ -26,10 +26,15 @@ class Settings(BaseSettings):
     # ── Server ────────────────────────────────────────────────────────────
     python_service_port: int = 8000
 
-    # ── Embedding ─────────────────────────────────────────────────────────
-    # Model used by sentence-transformers. Dimension must match DB column.
+    # ── Embedding (Legacy Local) ──────────────────────────────────────────
+    # Model used by sentence-transformers (384 dims).
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
+
+    # ── Embedding (OpenAI) ────────────────────────────────────────────────
+    # Model used by the new RAG ingestion pipeline (1536 dims).
+    openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
 
 
 settings = Settings()

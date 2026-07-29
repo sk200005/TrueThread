@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, Integer
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.config import settings
@@ -51,5 +51,22 @@ class DocumentChunk(Base):
     # Denormalized from source_documents — avoids a join during retrieval.
     query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id", ondelete="CASCADE"), nullable=False)
     chunk_text = Column(Text, nullable=False)
+    
+    # ── New metadata columns for Phase C pipeline ──
+    chunk_index = Column(
+        Integer, 
+        nullable=True, 
+        comment="0-based index of this chunk within the parent document."
+    )
+    metadata_ = Column(
+        "metadata",
+        JSONB, 
+        nullable=True,
+        comment="Stores source_type, author, url, subreddit, video_id, etc."
+    )
+    
+    # Notice we don't bind Vector dimension directly here if it changes between environments
+    # For now, it stays as the settings.embedding_dimension (which might be 384 from previous phase)
+    # But for the new pipeline, it will be 1536 in DB. The Vector type handles the schema parsing.
     embedding = Column(Vector(settings.embedding_dimension))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

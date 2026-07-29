@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.database import Base
 
 # Import models so Alembic can detect them for autogenerate
+from app.models.query import Query  # noqa: F401
 from app.models.source_document import DocumentChunk, SourceDocument  # noqa: F401
 
 config = context.config

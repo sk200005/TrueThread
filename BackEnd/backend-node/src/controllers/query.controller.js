@@ -119,19 +119,29 @@ async function getJobStatus(req, res, next) {
  *
  * The connection closes automatically when Python emits type='done' or type='error'.
  */
+
+// Job of this function  -listen to progress updates from the Python server and forward 
+// them to the frontend using Server-Sent Events (SSE).
+
 function streamJobProgress(req, res) {
   const { jobId } = req.params;
 
   // SSE response headers
+  // sent from the server to the browser
   res.set({
-    'Content-Type':  'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection':    'keep-alive',
-    'X-Accel-Buffering': 'no', // Disable Nginx buffering if behind a proxy
+    'Content-Type':  'text/event-stream',   
+    'Cache-Control': 'no-cache',            // Never cache live updates
+    'Connection':    'keep-alive',          // Don't close socket
+    'X-Accel-Buffering': 'no',              // Disable Nginx buffering if behind a proxy
   });
   res.flushHeaders();
 
-  // Connect to Python service's SSE stream and relay events
+  // streamFromPython(jobId) connect to Python service's SSE stream and relay events like : 
+      // {
+      //     "type":"progress",
+      //     "status":"Fetching Wikipedia"
+      // }
+
   const pythonStream = streamFromPython(jobId);
 
   pythonStream.on('event', (event) => {
@@ -170,6 +180,19 @@ function streamJobProgress(req, res) {
  * Re-submits a failed job to the Python service.
  * Only jobs with status='error' can be retried.
  */
+/**Frontend
+     │
+     │ POST /api/queries/101/retry
+     ▼
+retryJob()
+     │
+     ├── Check if job exists
+     ├── Verify the logged-in user owns it
+     ├── Verify job status is "error"
+     ├── Reset database status to "pending"
+     ├── Decide which sources to retry
+     ├── Send job to Python
+     └── Return "Job accepted" */
 async function retryJob(req, res, next) {
   try {
     const { jobId } = req.params;
@@ -182,29 +205,29 @@ async function retryJob(req, res, next) {
       [jobId, userId]
     );
 
-    if (!rows.length) {
+    if (!rows.length) {                                         //Check if job exists 
       return res.status(404).json({ error: 'Job not found' });
     }
 
     const job = rows[0];
-    if (job.status !== 'error') {
+    if (job.status !== 'error') {                               //Verify job status is "error"
       return res.status(409).json({
         error: `Job cannot be retried in status '${job.status}'. Only 'error' jobs can be retried.`,
       });
     }
 
-    // Reset DB status to 'pending' and clear sources_failed
-    await db.query(
+                      
+    await db.query(                                            // Reset database status to "pending" && clear sources_failed
       "UPDATE queries SET status = 'pending', sources_failed = NULL, completed_at = NULL WHERE id = $1",
       [jobId]
     );
 
-    // Determine which sources to actually retry
+    // Decide which sources to retry
     const sourcesToRetry = (job.sources_failed && job.sources_failed.length > 0)
       ? job.sources_failed
       : job.sources_requested;
 
-    // Re-submit to Python service
+    // Send job to Python
     try {
       await submitJob({
         jobId,
