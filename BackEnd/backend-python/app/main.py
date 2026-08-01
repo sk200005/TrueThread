@@ -19,13 +19,13 @@ from app.core.config import settings
 from app.routers import jobs
 
 # ── Logging ───────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
+logging.basicConfig(                 #Whenever something is logged, print it in this format.
+    level=logging.INFO,              #2026-08-01 20:30:11 [INFO] app.main: Server started
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
 # ── App ───────────────────────────────────────────────────────────────────
-app = FastAPI(
+app = FastAPI(                       #This creates the application object.... ~const app = express();
     title="Re-Search Python Service",
     description="LangGraph-powered research pipeline for the Re-Search platform.",
     version="0.1.0",
@@ -35,8 +35,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=True,     #Cookies and authorisation headers
+    allow_methods=["*"], 
     allow_headers=["*"],
 )
 
@@ -51,8 +51,8 @@ async def health():
 
 
 # ── Uvicorn runner (for `python -m app.main`) ─────────────────────────────
-if __name__ == "__main__":
-    import uvicorn
+if __name__ == "__main__":           #"Run the code below only if this file is executed directly."
+    import uvicorn                   # Uvicorn is a lightweight ASGI server.
 
     uvicorn.run(
         "app.main:app",
