@@ -41,8 +41,8 @@ app.add_middleware(
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────
-app.include_router(jobs.router)
-
+app.include_router(jobs.router)      #When the request starts with /api/v1/jobs, it will be handled by jobs.router
+                                     #Adds job related routes to the application from jobs.py
 
 @app.get("/health")
 async def health():
