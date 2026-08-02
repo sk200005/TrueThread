@@ -113,6 +113,30 @@ CREATE TABLE IF NOT EXISTS job_checkpoints (
 );
 
 -- ==========================================
+-- Extracted Claims
+-- LLM-extracted claims from source comments/chunks.
+-- Written at ingestion time by claim extraction pipeline.
+-- source_comment_id references the original comment ID from
+-- the scraping platform (e.g. Reddit's "t1_ipxtyld").
+-- ==========================================
+CREATE TABLE IF NOT EXISTS extracted_claims (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    claim_text TEXT NOT NULL,
+    entities JSONB,                        -- array of entity strings, e.g. ["iPhone", "Apple"]
+    claim_type VARCHAR(50),               -- comparison | effectiveness | warning | opinion | factual
+    direction VARCHAR(20),                -- positive | negative | neutral (nullable)
+    confidence VARCHAR(10),               -- high | medium | low
+    is_sincere BOOLEAN DEFAULT true,
+    source_comment_id TEXT,               -- platform-native ID (e.g. "t1_ipxtyld") or chunk UUID
+    source_platform VARCHAR(50),          -- reddit | youtube | wikipedia | ...
+    raw_llm_response JSONB,              -- full LLM response for debugging
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_extracted_claims_source_comment_id
+    ON extracted_claims(source_comment_id);
+
+-- ==========================================
 -- Example RAG Retrieval Query (reference)
 -- ==========================================
 -- SELECT chunk_text, source_document_id

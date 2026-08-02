@@ -36,5 +36,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_embedding_model: str = "text-embedding-3-small"
 
+    # ── Groq LLM Model ───────────────────────────────────────────────────
+    # Model used for summarization and claim extraction (via OpenAI-compatible API).
+    groq_model: str = "llama-3.3-70b-versatile"
+
 
 settings = Settings()

@@ -56,6 +56,32 @@ async def submit_job(payload: JobSubmitRequest, background_tasks: BackgroundTask
     return JobAcceptedResponse(jobId=payload.jobId)
 
 
+@router.post("/query", status_code=202, response_model=JobAcceptedResponse)
+async def submit_query(payload: JobSubmitRequest, background_tasks: BackgroundTasks):
+    """
+    Submit a query-time analysis job.
+
+    Unlike submit_job (which runs the INGESTION pipeline to fetch + store data),
+    this endpoint runs the QUERY pipeline:
+        rag_retrieve → extract_claims → summarize
+
+    It searches against already-ingested data in document_chunks and produces
+    a structured report. Use this AFTER data has been ingested.
+    """
+    # Guard against duplicate job IDs
+    if get_job(payload.jobId):
+        raise HTTPException(status_code=409, detail="Job already exists")
+
+    job = create_job(payload.jobId, payload.userId, payload.queryText, payload.sources or [])
+
+    # Import here to avoid circular imports — graph module is heavy
+    from app.graphs.query_graph import run_query_pipeline
+
+    background_tasks.add_task(run_query_pipeline, job)
+
+    return JobAcceptedResponse(jobId=payload.jobId)
+
+
 @router.get("/{job_id}/status", response_model=JobStatusResponse)
 async def job_status(job_id: str):
     """Poll the current status of a job."""
