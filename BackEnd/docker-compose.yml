@@ -1,0 +1,29 @@
+# docker-compose.yml — Infrastructure services for Re-Search
+#
+# Usage:
+#   docker-compose up -d redis     # Start Redis only
+#   docker-compose up -d           # Start all services
+#
+# Redis is used by BullMQ for the distributed job queue between
+# backend-node (producer) and backend-python (consumer/worker).
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: research-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    # Enable AOF persistence so queued jobs survive Redis restarts
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-data:
+    driver: local

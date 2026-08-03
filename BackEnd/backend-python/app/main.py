@@ -6,17 +6,24 @@ Start with:
 
 The app serves:
     GET  /health               — liveness probe
-    POST /api/v1/jobs          — submit a research job
-    GET  /api/v1/jobs/{id}/... — status, stream, result
+
+BullMQ workers (started via lifespan hook):
+    'research' queue  — ingestion pipeline (wikipedia fetch → store)
+    'query' queue     — query-time pipeline (retrieve → extract → summarize)
+
+Job dispatch flows through BullMQ + Redis. The old /api/v1/jobs REST
+endpoints have been removed — see worker.py for the BullMQ integration.
 """
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import jobs
+
+from app.worker import start_workers, stop_workers
 
 # ── Logging ───────────────────────────────────────────────────────────────
 logging.basicConfig(                 #Whenever something is logged, print it in this format.
@@ -24,11 +31,22 @@ logging.basicConfig(                 #Whenever something is logged, print it in 
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
+
+# ── Lifespan (BullMQ workers) ────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start BullMQ workers on boot, stop them on shutdown."""
+    await start_workers()
+    yield
+    await stop_workers()
+
+
 # ── App ───────────────────────────────────────────────────────────────────
 app = FastAPI(                       #This creates the application object.... ~const app = express();
     title="Re-Search Python Service",
     description="LangGraph-powered research pipeline for the Re-Search platform.",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────
@@ -36,13 +54,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,     #Cookies and authorisation headers
-    allow_methods=["*"], 
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────
-app.include_router(jobs.router)      #When the request starts with /api/v1/jobs, it will be handled by jobs.router
-                                     #Adds job related routes to the application from jobs.py
 
 @app.get("/health")
 async def health():

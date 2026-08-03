@@ -17,13 +17,14 @@ Why a separate graph (not merged into research_graph.py):
        query is triggered by a user query against existing data
     4. Cleaner code — each graph stays focused and readable
 
-SSE events are emitted at each node boundary so the Node gateway can
-stream live progress to the frontend client.
+Progress events are reported via BullMQ job.updateProgress() so the
+Node gateway can stream them to the frontend via QueueEvents + SSE.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -32,7 +33,9 @@ from app.graphs.nodes.extract_claims import extract_claims
 from app.graphs.nodes.retrieve import rag_retrieve
 from app.graphs.nodes.summarize import summarize
 from app.graphs.state import QueryState
-from app.services.job_manager import JobState
+
+# @deprecated — JobState no longer used. Workers now receive BullMQ Job objects.
+# from app.services.job_manager import JobState
 
 logger = logging.getLogger(__name__)
 
@@ -55,36 +58,51 @@ def build_query_graph() -> Any:
     return graph.compile()
 
 
-async def run_query_pipeline(job: JobState) -> None:
-    """
-    Execute the query-time graph for a job. Called as a BackgroundTask
-    by the jobs router.
+async def _emit(job, event: dict[str, Any]) -> None:
+    """Emit a progress event via BullMQ, auto-adding jobId and timestamp.
 
-    Emits SSE events to the job's event queue as each phase executes.
-    Event format matches what pythonServiceClient.js expects to parse:
-        { type, jobId, source, status, counts, error, timestamp }
+    Mirrors the old JobState.emit_event() interface so event payloads stay
+    identical to what the Node SSE layer expects.
+    """
+    event.setdefault("jobId", job.data.get("jobId", job.id))
+    event.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
+    await job.updateProgress(event)
+
+
+async def run_query_pipeline(job) -> dict:
+    """
+    Execute the query-time graph for a BullMQ job.
+
+    Reports progress via job.updateProgress() at the same points where
+    the old JobState.emit_event() was called — keeps the same event
+    shape so the Node SSE layer doesn't need to change.
 
     Args:
-        job: The JobState object from the job manager. Contains the query
-             text and job_id needed to run the pipeline.
+        job: BullMQ Job object. job.data contains:
+             { jobId, userId, queryText, sources }
+
+    Returns:
+        dict: The final results, stored by BullMQ as the job's return value.
     """
-    job.status = "running"
-    job.emit_event({"type": "connected", "status": "connected"})
+    job_id = job.data.get("jobId", job.id)
+    query_text = job.data["queryText"]
+
+    await _emit(job, {"type": "connected", "status": "connected"})
 
     try:
         compiled_graph = build_query_graph()
 
         # Initial state for the query-time pipeline
         initial_state: QueryState = {
-            "job_id": job.job_id,
-            "query": job.query_text,
+            "job_id": job_id,
+            "query": query_text,
             # query_id could be passed from the job if needed for scoped search.
             # For now, we search all chunks (cross-query retrieval).
             "top_k": 8,
         }
 
         # ── Phase 1: RAG Retrieval ───────────────────────────────────────
-        job.emit_event({
+        await _emit(job, {
             "type": "progress",
             "source": "rag_retrieve",
             "status": "started",
@@ -99,55 +117,56 @@ async def run_query_pipeline(job: JobState) -> None:
         final_report = final_state.get("final_report", {})
 
         # Emit progress events for each completed phase
-        job.emit_event({
+        await _emit(job, {
             "type": "progress",
             "source": "rag_retrieve",
             "status": "done",
             "counts": {"chunksRetrieved": len(retrieved_chunks)},
         })
 
-        job.emit_event({
+        await _emit(job, {
             "type": "progress",
             "source": "extract_claims",
             "status": "done",
             "counts": {"claimsExtracted": len(extracted_claims)},
         })
 
-        job.emit_event({
+        await _emit(job, {
             "type": "progress",
             "source": "summarize",
             "status": "done",
         })
 
-        # ── Update job state ─────────────────────────────────────────────
-        job.results = {
+        # ── Build results ────────────────────────────────────────────────
+        results = {
             "report": final_report,
             "chunksRetrieved": len(retrieved_chunks),
             "claimsExtracted": len(extracted_claims),
         }
-        job.status = "done"
 
-        # Emit terminal event — Node destroys the stream on receiving this
-        job.emit_event({
+        # Emit terminal event — Node closes the SSE stream on receiving this
+        await _emit(job, {
             "type": "done",
             "status": "done",
-            "results": job.results,
+            "results": results,
         })
 
         logger.info(
             "Query pipeline complete for job %s: %d chunks, %d claims",
-            job.job_id, len(retrieved_chunks), len(extracted_claims),
+            job_id, len(retrieved_chunks), len(extracted_claims),
         )
 
+        return results
+
     except Exception as exc:
-        job.status = "error"
         error_msg = str(exc)
 
-        # Emit terminal error event
-        job.emit_event({
+        # Emit terminal error event before re-raising
+        await _emit(job, {
             "type": "error",
             "status": "error",
             "error": error_msg,
         })
 
-        logger.exception("Query pipeline failed for job %s: %s", job.job_id, exc)
+        logger.exception("Query pipeline failed for job %s: %s", job_id, exc)
+        raise  # Let BullMQ mark the job as failed

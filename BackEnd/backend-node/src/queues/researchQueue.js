@@ -1,13 +1,16 @@
 'use strict';
 
 require('dotenv').config();
-const { Queue } = require('bullmq');
+const { Queue, QueueEvents } = require('bullmq');
 
 /**
- * BullMQ producer — adds research jobs to the 'research' queue.
- * The actual worker (which calls FastAPI) will be a separate process.
+ * BullMQ queue + event listener for research/ingestion jobs.
  *
- * Connection: uses REDIS_URL env var, defaults to localhost:6379.
+ * Queue name: 'research'
+ * Consumed by: backend-python worker (app/worker.py)
+ *
+ * Job data shape (matches python-service-contract.md payload):
+ *   { jobId, userId, queryText, sources }
  */
 const connection = {
   host: process.env.REDIS_HOST || 'localhost',
@@ -15,11 +18,12 @@ const connection = {
 };
 
 const researchQueue = new Queue('research', { connection });
+const researchQueueEvents = new QueueEvents('research', { connection });
 
 researchQueue.on('error', (err) => {
-  console.error('[Queue] BullMQ connection error:', err.message);
+  console.error('[ResearchQueue] BullMQ connection error:', err.message);
 });
 
-console.log('[Queue] researchQueue connected to Redis at', `${connection.host}:${connection.port}`);
+console.log('[ResearchQueue] researchQueue initialised (Redis %s:%s)', connection.host, connection.port);
 
-module.exports = { researchQueue };
+module.exports = { researchQueue, researchQueueEvents };

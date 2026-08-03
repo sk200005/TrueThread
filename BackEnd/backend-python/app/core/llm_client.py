@@ -26,7 +26,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Groq's API is OpenAI-compatible — just point base_url at Groq
+# Groq made its API compatible with the OpenAI API. — just point base_url at Groq
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 
@@ -90,13 +90,14 @@ class LLMClient:
 
 # ── Singleton ─────────────────────────────────────────────────────────────
 # Lazy-loaded so the OpenAI client isn't created at import time.
+            #object is created only when it is first needed, not when the module is imported.
+_llm_client: Optional[LLMClient] = None      
 
-_llm_client: Optional[LLMClient] = None
 
-
-def get_llm_client() -> LLMClient:
+def get_llm_client() -> LLMClient:        # creates singleton instance of LLMClient
     """Return a shared LLMClient instance (created on first call)."""
     global _llm_client
     if _llm_client is None:
-        _llm_client = LLMClient()
-    return _llm_client
+        _llm_client = LLMClient()        # returns the singleton instance to ensures that only one instance of LLMClient is created and reused
+                                         # This avoids repeated initialization and gives every part of 
+    return _llm_client                   # the application a shared connection object.

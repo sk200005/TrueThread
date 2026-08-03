@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-import re
+import re      # Regular expression matching - splits text into sentences == re.split(r'[.!?]', text).
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -46,8 +46,8 @@ MIN_WORD_COUNT = 5       # skip chunks with fewer words (same as JS)
 # ══════════════════════════════════════════════════════════════════════════
 # Pydantic model for claim validation (upgrade over JS version)
 # ══════════════════════════════════════════════════════════════════════════
-
-class ExtractedClaim(BaseModel):
+ 
+class ExtractedClaim(BaseModel):       # This is the expected structure of every AI answer.
     """
     Validates a single claim returned by the LLM.
 

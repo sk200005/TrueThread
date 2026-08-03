@@ -40,5 +40,9 @@ class Settings(BaseSettings):
     # Model used for summarization and claim extraction (via OpenAI-compatible API).
     groq_model: str = "llama-3.3-70b-versatile"
 
+    # ── Redis (BullMQ Job Queue) ─────────────────────────────────────────
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+
 
 settings = Settings()

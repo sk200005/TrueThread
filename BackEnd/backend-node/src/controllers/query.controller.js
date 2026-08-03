@@ -4,30 +4,29 @@
  * query.controller.js
  *
  * Handles research query lifecycle:
- *   POST /api/queries        — create job, submit to Python FastAPI service
+ *   POST /api/queries        — create job, enqueue to Redis via BullMQ
  *   GET  /api/queries/:id/status  — poll DB for current job status
- *   GET  /api/queries/:id/stream  — SSE: relay live progress events from Python service
- *   POST /api/queries/:id/retry   — re-submit a failed job to Python service
+ *   GET  /api/queries/:id/stream  — SSE: forward BullMQ progress events to client
+ *   POST /api/queries/:id/retry   — re-enqueue a failed job via BullMQ
  *
  * SSE Bridge:
- *   This controller connects to the Python service's SSE endpoint and relays
- *   events to the frontend client. Node acts as a pure proxy — no scraping logic.
+ *   This controller listens to BullMQ QueueEvents (progress/completed/failed)
+ *   on both the 'research' and 'query' queues and relays matching events to
+ *   the frontend client over SSE. Node acts as a pure relay — no scraping logic.
  *
- * MIGRATION NOTE (July 2026):
- *   Job execution moved from researchWorker.js (in-memory queue) to backend-python
- *   (FastAPI + LangGraph). The in-memory worker is retained but unused — see
- *   researchWorker.js for rollback instructions.
+ * MIGRATION NOTE (Aug 2026):
+ *   Job dispatch uses BullMQ + Redis. Python workers consume jobs
+ *   directly from Redis queues ('research' and 'query').
  */
 
+const { Job } = require('bullmq');
 const db = require('../db/client');
-const { submitJob, streamJobProgress: streamFromPython } = require('../services/pythonServiceClient');
-
-// @deprecated — retained for emergency rollback only. See researchWorker.js header.
-// const { addJob, jobEvents } = require('../workers/researchWorker');
+const { researchQueue, researchQueueEvents } = require('../queues/researchQueue');
+const { queryQueue, queryQueueEvents } = require('../queues/queryQueue');
 
 /**
  * POST /api/queries
- * Validates input, writes a `queries` row, submits to Python service, returns jobId immediately.
+ * Validates input, writes a `queries` row, enqueues to BullMQ, returns jobId immediately.
  */
 async function submitQuery(req, res, next) {
   try {
@@ -51,23 +50,26 @@ async function submitQuery(req, res, next) {
     );
     const jobId = rows[0].id;
 
-    // 2. Submit job to Python FastAPI service (non-blocking from our perspective —
-    //    Python runs the LangGraph pipeline as a background task)
+    // 2. Enqueue the job to Redis via BullMQ.
+    //    The Python worker picks it up and runs the LangGraph pipeline.
+    //    Using our Postgres UUID as BullMQ's jobId so events can be correlated.
     try {
-      await submitJob({
+      await researchQueue.add('research-job', {
         jobId,
         userId,
         queryText: queryText.trim(),
         sources: sourcesRequested,
+      }, {
+        jobId,  // Use our UUID as BullMQ's internal job ID
       });
-    } catch (pythonErr) {
-      // If Python service is down, mark job as error immediately
+    } catch (redisErr) {
+      // If Redis is down, mark job as error immediately
       await db.query(
         "UPDATE queries SET status = 'error' WHERE id = $1",
         [jobId]
       );
       return res.status(502).json({
-        error: 'Failed to reach Python pipeline service',
+        error: 'Failed to enqueue job (Redis unavailable)',
         jobId,
       });
     }
@@ -112,72 +114,135 @@ async function getJobStatus(req, res, next) {
 /**
  * GET /api/queries/:jobId/stream
  *
- * SSE relay — connects to the Python service's SSE endpoint and forwards
- * all events to the frontend client. Node adds no events of its own.
+ * SSE endpoint — listens to BullMQ QueueEvents for progress/completed/failed
+ * and forwards matching events to the frontend client.
  *
- * Event format (from Python): { type, jobId, source?, status?, counts?, error?, timestamp }
+ * Event format (unchanged from previous REST-based contract):
+ *   { type, jobId, source?, status?, counts?, error?, timestamp }
  *
- * The connection closes automatically when Python emits type='done' or type='error'.
+ * Terminal events: type="done" or type="error" close the SSE connection.
+ *
+ * If the job already completed/failed before the client connects, the
+ * terminal event is replayed immediately.
  */
-
-// Job of this function  -listen to progress updates from the Python server and forward 
-// them to the frontend using Server-Sent Events (SSE).
-
-function streamJobProgress(req, res) {
+async function streamJobProgress(req, res) {
   const { jobId } = req.params;
 
   // SSE response headers
-  // sent from the server to the browser
   res.set({
-    'Content-Type':  'text/event-stream',   
+    'Content-Type':  'text/event-stream',
     'Cache-Control': 'no-cache',            // Never cache live updates
     'Connection':    'keep-alive',          // Don't close socket
     'X-Accel-Buffering': 'no',              // Disable Nginx buffering if behind a proxy
   });
   res.flushHeaders();
 
-  // streamFromPython(jobId) connect to Python service's SSE stream and relay events like : 
-      // {
-      //     "type":"progress",
-      //     "status":"Fetching Wikipedia"
-      // }
+  let closed = false;
 
-  const pythonStream = streamFromPython(jobId);
+  // ── Check if job already completed/failed before SSE connected ────────
+  try {
+    let existingJob = await Job.fromId(researchQueue, jobId);
+    if (!existingJob) existingJob = await Job.fromId(queryQueue, jobId);
 
-  pythonStream.on('event', (event) => {
-    sendEvent(res, event);
-    // Auto-close SSE stream when the job reaches a terminal state
-    if (event.type === 'done' || event.type === 'error') {
-      res.end();
+    if (existingJob) {
+      const state = await existingJob.getState();
+
+      if (state === 'completed') {
+        const results = existingJob.returnvalue || {};
+        sendEvent(res, {
+          type: 'done', jobId, status: 'done', results,
+          timestamp: new Date().toISOString(),
+        });
+        res.end();
+        return;
+      }
+
+      if (state === 'failed') {
+        sendEvent(res, {
+          type: 'error', jobId, status: 'error',
+          error: existingJob.failedReason,
+          timestamp: new Date().toISOString(),
+        });
+        res.end();
+        return;
+      }
     }
-  });
+  } catch (lookupErr) {
+    // Redis might be down — fall through to live listener, which will
+    // reconnect automatically when Redis comes back.
+  }
 
-  pythonStream.on('error', (err) => {
-    // Python service unreachable — send error event and close
+  // ── Live event handlers ───────────────────────────────────────────────
+  // BullMQ QueueEvents are queue-wide; we filter by jobId.
+
+  function handleProgress({ jobId: jId, data }) {
+    if (closed || jId !== jobId) return;
+    const event = (typeof data === 'string') ? JSON.parse(data) : data;
+    sendEvent(res, event);
+    // The worker sends terminal events via updateProgress too
+    if (event.type === 'done' || event.type === 'error') {
+      close();
+    }
+  }
+
+  function handleCompleted({ jobId: jId, returnvalue }) {
+    if (closed || jId !== jobId) return;
+    // Fallback — the worker should have already sent a 'done' progress
+    // event, but if the client missed it, handle the BullMQ completed event.
+    const results = returnvalue
+      ? (typeof returnvalue === 'string' ? JSON.parse(returnvalue) : returnvalue)
+      : {};
     sendEvent(res, {
-      type: 'error',
-      jobId,
-      status: 'error',
-      error: 'Lost connection to pipeline service',
+      type: 'done', jobId, status: 'done', results,
       timestamp: new Date().toISOString(),
     });
-    res.end();
-  });
+    close();
+  }
 
-  pythonStream.on('end', () => {
+  function handleFailed({ jobId: jId, failedReason }) {
+    if (closed || jId !== jobId) return;
+    sendEvent(res, {
+      type: 'error', jobId, status: 'error',
+      error: failedReason,
+      timestamp: new Date().toISOString(),
+    });
+    close();
+  }
+
+  // Listen on both queues — jobIds are globally unique UUIDs, so no conflict.
+  researchQueueEvents.on('progress', handleProgress);
+  researchQueueEvents.on('completed', handleCompleted);
+  researchQueueEvents.on('failed', handleFailed);
+  queryQueueEvents.on('progress', handleProgress);
+  queryQueueEvents.on('completed', handleCompleted);
+  queryQueueEvents.on('failed', handleFailed);
+
+  // Keepalive every 30s to prevent proxy/client timeout
+  const keepalive = setInterval(() => {
+    if (!closed) res.write(': keepalive\n\n');
+  }, 30000);
+
+  function close() {
+    if (closed) return;
+    closed = true;
+    researchQueueEvents.off('progress', handleProgress);
+    researchQueueEvents.off('completed', handleCompleted);
+    researchQueueEvents.off('failed', handleFailed);
+    queryQueueEvents.off('progress', handleProgress);
+    queryQueueEvents.off('completed', handleCompleted);
+    queryQueueEvents.off('failed', handleFailed);
+    clearInterval(keepalive);
     res.end();
-  });
+  }
 
   // Clean up when the client disconnects early
-  req.on('close', () => {
-    // pythonStream will be GC'd — no explicit cleanup needed for the EventEmitter
-  });
+  req.on('close', close);
 }
 
 /**
  * POST /api/queries/:jobId/retry
  *
- * Re-submits a failed job to the Python service.
+ * Re-enqueues a failed job via BullMQ.
  * Only jobs with status='error' can be retried.
  */
 /**Frontend
@@ -191,7 +256,7 @@ retryJob()
      ├── Verify job status is "error"
      ├── Reset database status to "pending"
      ├── Decide which sources to retry
-     ├── Send job to Python
+     ├── Re-enqueue to Redis via BullMQ
      └── Return "Job accepted" */
 async function retryJob(req, res, next) {
   try {
@@ -205,7 +270,7 @@ async function retryJob(req, res, next) {
       [jobId, userId]
     );
 
-    if (!rows.length) {                                         //Check if job exists 
+    if (!rows.length) {                                         //Check if job exists
       return res.status(404).json({ error: 'Job not found' });
     }
 
@@ -216,7 +281,6 @@ async function retryJob(req, res, next) {
       });
     }
 
-                      
     await db.query(                                            // Reset database status to "pending" && clear sources_failed
       "UPDATE queries SET status = 'pending', sources_failed = NULL, completed_at = NULL WHERE id = $1",
       [jobId]
@@ -227,21 +291,27 @@ async function retryJob(req, res, next) {
       ? job.sources_failed
       : job.sources_requested;
 
-    // Send job to Python
+    // Re-enqueue to Redis via BullMQ
     try {
-      await submitJob({
+      // Remove the old failed job from Redis so we can reuse the same jobId
+      const oldJob = await Job.fromId(researchQueue, jobId);
+      if (oldJob) await oldJob.remove();
+
+      await researchQueue.add('research-job', {
         jobId,
         userId,
         queryText: job.query_text,
         sources: sourcesToRetry,
+      }, {
+        jobId,
       });
-    } catch (pythonErr) {
+    } catch (redisErr) {
       await db.query(
         "UPDATE queries SET status = 'error' WHERE id = $1",
         [jobId]
       );
       return res.status(502).json({
-        error: 'Failed to reach Python pipeline service',
+        error: 'Failed to enqueue job (Redis unavailable)',
         jobId,
       });
     }
