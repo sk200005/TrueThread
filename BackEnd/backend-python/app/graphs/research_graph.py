@@ -24,8 +24,6 @@ from app.graphs.nodes.store_node import store_documents
 from app.graphs.nodes.wikipedia_node import wikipedia_fetch
 from app.graphs.state import ResearchState
 
-# @deprecated — JobState no longer used. Workers now receive BullMQ Job objects.
-# from app.services.job_manager import JobState
 
 logger = logging.getLogger(__name__)
 

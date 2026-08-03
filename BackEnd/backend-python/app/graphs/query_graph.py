@@ -34,8 +34,6 @@ from app.graphs.nodes.retrieve import rag_retrieve
 from app.graphs.nodes.summarize import summarize
 from app.graphs.state import QueryState
 
-# @deprecated — JobState no longer used. Workers now receive BullMQ Job objects.
-# from app.services.job_manager import JobState
 
 logger = logging.getLogger(__name__)
 

@@ -10,9 +10,6 @@ const authRoutes = require('./routes/auth.routes');
 const queryRoutes = require('./routes/query.routes');
 const reportRoutes = require('./routes/report.routes');
 
-// @deprecated — In-memory job worker replaced by Python FastAPI service (backend-python).
-// Retained for emergency rollback. To re-enable, uncomment and update query.controller.js.
-// const { startWorker } = require('./workers/researchWorker');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,8 +32,7 @@ app.use(errorHandler);
 // ── Start ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {                                                      // Starts listening for incoming requests.
   console.log(`[backend-node] Server running on http://localhost:${PORT}`);
-  console.log(`[backend-node] Jobs are now forwarded to Python service at ${process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'}`);
-  // @deprecated — startWorker() no longer called. See researchWorker.js.
+  console.log(`[backend-node] Jobs enqueued to Redis via BullMQ (${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'})`);
 });
 
 module.exports = app;
