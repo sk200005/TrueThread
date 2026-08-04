@@ -8,6 +8,7 @@ Two separate state schemas for two separate graphs:
 
 2. QueryState — Used by the QUERY-TIME graph (retrieve → extract → summarize).
    Introduced in Phase C for the RAG + summarization pipeline.
+   Extended in Phase E with classification + verification fields.
 """
 
 from __future__ import annotations
@@ -88,11 +89,72 @@ class ExtractedClaimDict(TypedDict):
     source_comment_id: str              # chunk_id or platform-native comment ID
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Phase E — Verification Pipeline TypedDicts
+# ══════════════════════════════════════════════════════════════════════════
+
+class ClassifiedClaimDict(TypedDict):
+    """Output of classify_claims: routing decision per claim."""
+
+    claim_text: str
+    entities: list[str]
+    claim_type: str
+    confidence: str
+    source_comment_id: str
+    verifiable: bool                    # False for pure opinion/recommendation
+    time_nature: str                    # "current" | "historical" | "both"
+    route: str                          # "news" | "wikipedia" | "both" | "skip"
+
+
+class NewsArticleDict(TypedDict, total=False):
+    """A single news article returned by NewsAPI, after relevance filtering."""
+
+    title: str
+    url: str
+    source_name: str
+    snippet: str                        # description or truncated content
+    published_at: str                   # ISO-8601
+    relevance_score: float              # 0-1, from relevance filter
+
+
+class ClaimEvidenceDict(TypedDict, total=False):
+    """Evidence gathered for a single claim (news, wiki, or both)."""
+
+    claim_text: str
+    route: str                          # The route this claim was classified to
+    news_articles: list[NewsArticleDict]
+    wiki_context: str                   # Wikipedia excerpt text
+    wiki_url: str                       # Wikipedia article URL
+    wiki_title: str                     # Wikipedia article title
+
+
+class CitationDict(TypedDict):
+    """A single source citation backing a verification verdict."""
+
+    url: str
+    title: str
+    snippet: str
+
+
+class VerifiedClaimDict(TypedDict):
+    """Final verification result for a single claim."""
+
+    claim: str
+    verdict: str                        # "supported" | "contradicted" | "unverified" | "disputed"
+    confidence: float                   # 0.0 - 1.0
+    source_type: str                    # "news" | "wikipedia" | "both"
+    citations: list[CitationDict]
+    justification: str                  # LLM's reasoning for the verdict
+
+
 class QueryState(TypedDict, total=False):
     """
     LangGraph state for the query-time pipeline.
 
-    Flow: START → rag_retrieve → extract_claims → summarize → END
+    Flow (Phase E):
+        START → rag_retrieve → extract_claims → classify_claims
+              → [news_verify | wiki_verify | both | skip]
+              → verify_claim → summarize → END
 
     All fields are optional (total=False). Each node reads the fields it
     needs and returns a partial dict with the fields it produces.
@@ -110,8 +172,18 @@ class QueryState(TypedDict, total=False):
     # ── Produced by extract_claims ────────────────────────────────────────
     extracted_claims: list[ExtractedClaimDict]
 
+    # ── Produced by classify_claims (Phase E) ─────────────────────────────
+    classified_claims: list[ClassifiedClaimDict]
+
+    # ── Produced by news_verify / wiki_verify (Phase E) ───────────────────
+    news_evidence: list[ClaimEvidenceDict]
+    wiki_evidence: list[ClaimEvidenceDict]
+
+    # ── Produced by verify_claim (Phase E) ────────────────────────────────
+    verified_claims: list[VerifiedClaimDict]
+
     # ── Produced by summarize ─────────────────────────────────────────────
     final_report: dict[str, Any]        # The JSON report: sentiment, themes, summary
 
     # ── Bookkeeping ───────────────────────────────────────────────────────
-    status: Literal["pending", "retrieving", "extracting", "summarizing", "done", "error"]
+    status: Literal["pending", "retrieving", "extracting", "classifying", "verifying", "summarizing", "done", "error"]

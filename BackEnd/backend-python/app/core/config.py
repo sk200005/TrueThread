@@ -44,5 +44,10 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
 
+    # ── NewsAPI (Phase E — cross-verification) ────────────────────────────
+    # Free tier: 100 requests/day, ~1 month lookback.
+    # Get a key at https://newsapi.org/register
+    news_api_key: str = ""
+
 
 settings = Settings()

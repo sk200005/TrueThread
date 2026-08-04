@@ -185,7 +185,7 @@ async def _save_report_to_db(query_id: str, report: dict[str, Any]) -> str | Non
                         "overall": report.get("overall_sentiment", "neutral"),
                     }),
                     "themes": json.dumps(report.get("themes", [])),
-                    "verified_claims": json.dumps([]),  # Placeholder until verify_claims node
+                    "verified_claims": json.dumps(report.get("verified_claims", [])),
                 },
             )
             await session.commit()
@@ -210,6 +210,7 @@ async def summarize(state: QueryState) -> dict[str, Any]:
         - query_id (str, optional): For saving the report to the right query
         - retrieved_chunks: List of RetrievedChunk dicts
         - extracted_claims (optional): List of ExtractedClaimDict dicts
+        - verified_claims (optional): List of VerifiedClaimDict dicts
 
     Returns:
         - final_report: The JSON report dict
@@ -219,15 +220,17 @@ async def summarize(state: QueryState) -> dict[str, Any]:
     query_id = state.get("query_id")
     chunks = state.get("retrieved_chunks", [])
     claims = state.get("extracted_claims", [])
+    verified_claims = state.get("verified_claims", [])
 
     if not chunks:
         logger.info("No chunks to summarize.")
         fallback = _make_fallback_report(query)
+        fallback["verified_claims"] = []
         return {"final_report": fallback, "status": "summarizing"}
 
     logger.info(
-        "Summarizing %d chunks and %d claims for query: %r",
-        len(chunks), len(claims), query,
+        "Summarizing %d chunks, %d claims, and %d verified claims for query: %r",
+        len(chunks), len(claims), len(verified_claims), query,
     )
 
     # ── Build prompt and call LLM ────────────────────────────────────────
@@ -244,6 +247,7 @@ async def summarize(state: QueryState) -> dict[str, Any]:
     except Exception as exc:
         logger.error("LLM call failed for summarization: %s", exc)
         fallback = _make_fallback_report(query)
+        fallback["verified_claims"] = []
         return {"final_report": fallback, "status": "error"}
 
     # ── Parse response ───────────────────────────────────────────────────
@@ -253,13 +257,15 @@ async def summarize(state: QueryState) -> dict[str, Any]:
         logger.warning("Using fallback report due to parse failure.")
         report = _make_fallback_report(query)
 
-    # Add the raw query for context
+    # Add the raw query and verified claims for context
     report["query"] = query
+    report["verified_claims"] = verified_claims
 
     logger.info("Report generated:")
     logger.info("  Sentiment : %s", report.get("overall_sentiment", "unknown"))
     logger.info("  Themes    : %d", len(report.get("themes", [])))
     logger.info("  Summary   : %s", report.get("summary", "")[:100])
+    logger.info("  Verified Claims: %d", len(report.get("verified_claims", [])))
 
     # ── Save to DB ───────────────────────────────────────────────────────
     if query_id:
