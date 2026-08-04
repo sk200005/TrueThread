@@ -1,18 +1,17 @@
 """
 graphs/research_graph.py — Builds and runs the LangGraph research pipeline.
 
-Graph structure (Milestone 2 — Wikipedia only):
-    START → wikipedia_fetch → store_documents → END
-
-Future milestones will add parallel fetch nodes for Reddit, YouTube, News
-and downstream summarize/verify nodes.
+Graph structure (Milestone 4 — Parallel Fetch):
+    START → wikipedia_fetch ──────┐
+    START → reddit_fetch    ──────┼→ store_documents → END
+    START → youtube_fetch   ──────┘
 
 Progress events are reported via BullMQ job.updateProgress() so the
 Node gateway can stream them to the frontend via QueueEvents + SSE.
 The event format matches docs/python-service-contract.md exactly.
 """
 
-from __future__ import annotations
+from __future__ import annotations    # Allows Python to delay evaluating type hints.
 
 import logging
 from datetime import datetime, timezone
@@ -22,6 +21,8 @@ from langgraph.graph import END, START, StateGraph
 
 from app.graphs.nodes.store_node import store_documents
 from app.graphs.nodes.wikipedia_node import wikipedia_fetch
+from app.graphs.nodes.reddit_node import reddit_fetch
+from app.graphs.nodes.youtube_node import youtube_fetch
 from app.graphs.state import ResearchState
 
 
@@ -33,10 +34,20 @@ def build_graph() -> Any:
     graph = StateGraph(ResearchState)
 
     graph.add_node("wikipedia_fetch", wikipedia_fetch)
+    graph.add_node("reddit_fetch", reddit_fetch)
+    graph.add_node("youtube_fetch", youtube_fetch)
     graph.add_node("store_documents", store_documents)
 
+    # Fan-out: All fetch nodes start simultaneously
     graph.add_edge(START, "wikipedia_fetch")
+    graph.add_edge(START, "reddit_fetch")
+    graph.add_edge(START, "youtube_fetch")
+
+    # Fan-in: All fetch nodes converge at store_documents
     graph.add_edge("wikipedia_fetch", "store_documents")
+    graph.add_edge("reddit_fetch", "store_documents")
+    graph.add_edge("youtube_fetch", "store_documents")
+    
     graph.add_edge("store_documents", END)
 
     return graph.compile()
@@ -73,17 +84,28 @@ async def run_pipeline(job) -> dict:
     query_text = job.data["queryText"]
     sources = job.data.get("sources", [])
 
-    await _emit(job, {"type": "connected", "status": "connected"})
+    await _emit(job, {"type": "connected", "status": "connected"})     # internally - job.updateProgress(...)
+
+    # Wire the resume path: if a source is NOT in `sources` (which means it either
+    # succeeded in a prior run or wasn't requested), we pre-populate its state
+    # as "done" with empty documents. The fetch nodes will see "done" and short-circuit.
+    # store_documents will merge [] for them, which is correct because their
+    # actual documents were already stored in the DB during the previous run.
+    all_possible_sources = ["wikipedia", "reddit", "youtube"]
+    initial_sources_state = {}
+    for s in all_possible_sources:
+        if s not in sources:
+            initial_sources_state[s] = {"status": "done", "documents": [], "error": None}
 
     try:
-        compiled_graph = build_graph()
+        compiled_graph = build_graph()       # Nothing executes yet. Just builds the workflow.
 
         initial_state: ResearchState = {
             "job_id": job_id,
             "query": query_text,
             "sources_to_fetch": sources,
-            "raw_documents": [],
-            "failed_sources": [],
+            "sources": initial_sources_state,
+            "merged_documents": [],
             "status": "pending",
             "results": {},
         }
@@ -92,30 +114,35 @@ async def run_pipeline(job) -> dict:
         await _emit(job, {"type": "progress", "source": "wikipedia", "status": "started"})
 
         # Run the full graph
-        final_state = await compiled_graph.ainvoke(initial_state)
+        final_state = await compiled_graph.ainvoke(initial_state)   # Starts executing this graph using the provided state.
 
         # Collect results from the final state
         results = final_state.get("results", {})
         docs_count = results.get("docsInserted", 0)
         chunks_count = results.get("chunksInserted", 0)
-        failed = final_state.get("failed_sources", [])
+        
+        final_sources = final_state.get("sources", {}) 
+        failed = [s for s, res in final_sources.items() if res.get("status") == "failed"]  #appends failed sources to `failed` list if any
+        
+        # Emit terminal progress event for each source that was fetched in this run
+        for s in sources:
+            s_res = final_sources.get(s, {})
+            await _emit(job, {
+                "type": "progress",
+                "source": s,
+                "status": s_res.get("status", "error"),
+                # We don't track per-source chunk metrics right now, so omit counts
+            })
 
-        # Emit: wikipedia fetch completed
-        await _emit(job, {
-            "type": "progress",
-            "source": "wikipedia",
-            "status": "done" if "wikipedia" not in failed else "error",
-            "counts": {"docsInserted": docs_count, "chunksInserted": chunks_count},
-        })
-
-        # Build results dict
-        job_results = {
-            "wikipedia": {
-                "status": "done" if "wikipedia" not in failed else "error",
-                "docsInserted": docs_count,
-                "chunksInserted": chunks_count,
+        # Build results dict (what gets returned to BullMQ)
+        job_results = {}
+        for s in all_possible_sources:
+            s_res = final_sources.get(s, {})
+            job_results[s] = {
+                "status": s_res.get("status", "pending"),
             }
-        }
+        job_results["total_docs_inserted"] = docs_count
+        job_results["total_chunks_inserted"] = chunks_count
 
         # Emit terminal event — Node closes the SSE stream on receiving this
         await _emit(job, {"type": "done", "status": "done", "results": job_results})

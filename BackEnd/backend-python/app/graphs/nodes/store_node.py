@@ -54,22 +54,40 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
 
     Returns updated state with results counts.
     """
-    raw_docs = state.get("raw_documents", [])
+    sources = state.get("sources", {})
     job_id = state.get("job_id")
     query = state.get("query", "")
 
-    if not raw_docs:
-        logger.info("No documents to store for job %s", job_id)
-        return {"status": "storing", "results": {"docsInserted": 0, "chunksInserted": 0}}
+    # Fan-in: merge documents from all successful sources
+    merged_documents: list[SourceDoc] = []
+    successful_sources = []
+    failed_sources = []
 
-    logger.info("Storing %d documents for job %s", len(raw_docs), job_id)
+    for source_name, source_result in sources.items():
+        if source_result.get("status") == "done":
+            docs = source_result.get("documents", [])
+            merged_documents.extend(docs)
+            successful_sources.append(source_name)
+        elif source_result.get("status") == "failed":
+            failed_sources.append(source_name)
+
+    logger.info(
+        "Fan-in complete for job %s. Success: %s, Failed: %s",
+        job_id, successful_sources, failed_sources
+    )
+
+    if not merged_documents:
+        logger.info("No documents to store for job %s", job_id)
+        return {"status": "storing", "results": {"docsInserted": 0, "chunksInserted": 0}, "merged_documents": []}
+
+    logger.info("Storing %d merged documents for job %s", len(merged_documents), job_id)
 
     model = _get_embedding_model()
     docs_inserted = 0
     chunks_inserted = 0
 
     async with async_session() as session:
-        for doc in raw_docs:
+        for doc in merged_documents:
             try:
                 # 1. Insert source_document row
                 doc_id = uuid.uuid4()
@@ -136,6 +154,7 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
 
     return {
         "status": "storing",
+        "merged_documents": merged_documents,
         "results": {
             "docsInserted": docs_inserted,
             "chunksInserted": chunks_inserted,

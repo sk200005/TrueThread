@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional, TypedDict
 
+import operator
+from typing import Annotated
 
 # ══════════════════════════════════════════════════════════════════════════
 # Ingestion Graph State (existing — DO NOT MODIFY)
@@ -30,6 +32,21 @@ class SourceDoc(TypedDict):
     engagement_metrics: Optional[dict[str, Any]]
 
 
+class SourceResult(TypedDict, total=False):
+    status: Literal["pending", "in_progress", "done", "failed"]
+    documents: list[SourceDoc]
+    error: str | None
+
+def merge_sources(a: dict[str, SourceResult], b: dict[str, SourceResult]) -> dict[str, SourceResult]:
+    """Deep merge for the sources dict to support concurrent partial writes."""
+    res = a.copy()
+    for k, v in b.items():
+        if k in res:
+            res[k] = {**res[k], **v}
+        else:
+            res[k] = v
+    return res
+
 class ResearchState(TypedDict, total=False):
     """
     LangGraph state flowing through the research pipeline.
@@ -42,8 +59,8 @@ class ResearchState(TypedDict, total=False):
     job_id: str
     query: str
     sources_to_fetch: list[str]
-    raw_documents: list[SourceDoc]
-    failed_sources: list[str]
+    sources: Annotated[dict[str, SourceResult], merge_sources]
+    merged_documents: list[SourceDoc]
     status: Literal["pending", "fetching", "storing", "done", "error"]
     results: dict[str, Any]
 

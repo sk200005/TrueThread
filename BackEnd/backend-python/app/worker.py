@@ -9,6 +9,15 @@ Workers are started via FastAPI's lifespan hook in main.py, so they
 run in the same process as the /health endpoint. This keeps things
 simple: one process, one event loop, liveness probes still work.
 
+One Process
+---------------------
+FastAPI
+
+Research Worker
+Query Worker
+Health Endpoint
+--------------------- 
+
 Usage:
     Workers start automatically when the FastAPI app boots.
     No separate process or CLI needed.
@@ -18,10 +27,10 @@ from __future__ import annotations
 
 import logging
 
-import asyncpg
-from bullmq import Worker
+import asyncpg                              #asynchronous PostgreSQL driver.
+from bullmq import Worker                   #BullMQ worker.
 
-from app.core.config import settings
+from app.core.config import settings        #App's settings (from .env).
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +93,8 @@ async def _update_query_status(
 
 async def process_research_job(job, token):
     """Process an ingestion job from the 'research' queue."""
-    from app.graphs.research_graph import run_pipeline
+    from app.graphs.research_graph import run_pipeline     # Lazy Import 
+    # Importing in top --> increases startup time and can create circular import issues.
 
     job_id = job.data.get("jobId", job.id)
     logger.info("Processing research job %s", job_id)
@@ -99,7 +109,7 @@ async def process_research_job(job, token):
         return result
     except Exception:
         await _update_query_status(job_id, "error")
-        raise
+        raise                                         # re-raise to let BullMQ know it failed
 
 
 async def process_query_job(job, token):
@@ -116,20 +126,20 @@ async def process_query_job(job, token):
         return result
     except Exception:
         await _update_query_status(job_id, "error")
-        raise
+        raise                                         # re-raise to let BullMQ know it failed
 
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────
 
-async def start_workers() -> None:
+async def start_workers() -> None:                          #This is called by FastAPI during startup.
     """Create and start BullMQ workers for both queues."""
     opts = _redis_opts()
 
-    research_worker = Worker("research", process_research_job, opts)
-    query_worker = Worker("query", process_query_job, opts)
+    research_worker = Worker("research", process_research_job, opts) # Create worker for research queue
+    query_worker = Worker("query", process_query_job, opts)           # Create worker for query queue
 
-    _workers.extend([research_worker, query_worker])
-
+    _workers.extend([research_worker, query_worker])     # Appends both workers to the _workers list
+ 
     logger.info(
         "BullMQ workers started (Redis %s:%s) — listening on queues: research, query",
         settings.redis_host,

@@ -68,11 +68,17 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
     Populates `raw_documents` with SourceDoc dicts for each article found.
     Appends "wikipedia" to `failed_sources` if the entire fetch fails.
     """
-    query = state["query"]
-    logger.info("Wikipedia fetch starting for query: %r", query)
+    query = state.get("query", "")
+    sources = state.get("sources", {})
+    wiki_state = sources.get("wikipedia", {})
 
-    documents: list[SourceDoc] = list(state.get("raw_documents", []))
-    failed: list[str] = list(state.get("failed_sources", []))
+    if wiki_state.get("status") == "done":
+        logger.info("Wikipedia fetch already done, skipping.")
+        return {"sources": {"wikipedia": wiki_state}}
+
+    logger.info("Wikipedia fetch starting for query: %r", query)
+    documents: list[SourceDoc] = []
+
 
     try:
         titles = _search_wikipedia(query)
@@ -80,7 +86,15 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
 
         if not titles:
             logger.warning("No Wikipedia articles found for query: %r", query)
-            return {"raw_documents": documents, "status": "fetching"}
+            return {
+                "sources": {
+                    "wikipedia": {
+                        "status": "done",
+                        "documents": documents,
+                        "error": None
+                    }
+                }
+            }
 
         for title in titles[:MAX_ARTICLES]:
             try:
@@ -122,10 +136,22 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
 
     except Exception as exc:
         logger.error("Wikipedia fetch failed entirely: %s", exc)
-        failed.append("wikipedia")
+        return {
+            "sources": {
+                "wikipedia": {
+                    "status": "failed",
+                    "documents": [],
+                    "error": str(exc)
+                }
+            }
+        }
 
     return {
-        "raw_documents": documents,
-        "failed_sources": failed,
-        "status": "fetching",
+        "sources": {
+            "wikipedia": {
+                "status": "done",
+                "documents": documents,
+                "error": None
+            }
+        }
     }
