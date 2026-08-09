@@ -46,7 +46,7 @@ async function searchPosts(page, query) {
       urls = links.map(a => a.getAttribute('href')).filter(href => href && href.match(/\/r\/[^\/]+\/comments\/[a-z0-9]+\//));
     }
     urls = urls.map(url => url.startsWith('http') ? url : window.location.origin + url);
-    return [...new Set(urls)].slice(0, 7);
+    return [...new Set(urls)].slice(0, 5);
   });
   return postUrls;
 }
@@ -114,9 +114,6 @@ async function extractComments(page, postId) {
 
     for (const tlc of topLevelComments) {
       processComment(tlc, true);
-      for (const l1 of Array.from(tlc.querySelectorAll('shreddit-comment[depth="1"]')).slice(0, 7)) {
-        processComment(l1, false);
-      }
     }
     return results;
   }, postId);

@@ -7,6 +7,7 @@ const {
   getJobStatus,
   streamJobProgress,
   retryJob,
+  stopJob,
 } = require('../controllers/query.controller');
 
 const router = express.Router();
@@ -22,5 +23,8 @@ router.get('/:jobId/stream', authenticate, streamJobProgress);
 
 // POST /api/queries/:jobId/retry — re-enqueue a failed job from its last checkpoint
 router.post('/:jobId/retry', authenticate, retryJob);
+
+// POST /api/queries/:jobId/stop — cancel a job
+router.post('/:jobId/stop', authenticate, stopJob);
 
 module.exports = router;

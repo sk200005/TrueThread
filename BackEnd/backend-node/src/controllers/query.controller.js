@@ -326,10 +326,56 @@ async function retryJob(req, res, next) {
   }
 }
 
+/**
+ * POST /api/queries/:jobId/stop
+ * Cancels a job and updates the status to 'cancelled'
+ */
+async function stopJob(req, res, next) {
+  try {
+    const { jobId } = req.params;
+    const userId = req.user.userId;
+
+    // Verify ownership
+    const { rows } = await db.query(
+      `SELECT id, status FROM queries WHERE id = $1 AND user_id = $2`,
+      [jobId, userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const job = rows[0];
+    if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+      return res.status(400).json({ error: 'Job is already finished or cancelled.' });
+    }
+
+    // Update DB
+    await db.query(
+      "UPDATE queries SET status = 'cancelled' WHERE id = $1",
+      [jobId]
+    );
+
+    // Try to remove from BullMQ (ignore errors if it's already active/removed)
+    try {
+      let bJob = await Job.fromId(researchQueue, jobId);
+      if (bJob) await bJob.remove();
+      bJob = await Job.fromId(queryQueue, jobId);
+      if (bJob) await bJob.remove();
+    } catch (err) {
+      // Ignored: Job might be active and BullMQ throws when removing active jobs
+    }
+
+    return res.status(200).json({ jobId, status: 'cancelled', message: 'Job cancelled' });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ── SSE helper ────────────────────────────────────────────────────────────────
 
 function sendEvent(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-module.exports = { submitQuery, getJobStatus, streamJobProgress, retryJob };
+module.exports = { submitQuery, getJobStatus, streamJobProgress, retryJob, stopJob };

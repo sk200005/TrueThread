@@ -1,5 +1,6 @@
 # Re-Search Platform — Docker Compose
 # Provides shared infrastructure services for local development.
+#A container is an isolated environment in which a program is currently running.
 
 services:
   # ── PostgreSQL + pgvector ───────────────────────────────────────────────
@@ -23,22 +24,43 @@ services:
       timeout: 3s
       retries: 5
 
+  # ── Redis ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: research-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    # AOF persistence ensures queued jobs survive restarts
+    command: redis-server --appendonly yes          #Save data to disk continuously.
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # ── Python FastAPI Service ──────────────────────────────────────────────
   backend-python:
     build:
       context: ./BackEnd/backend-python
       dockerfile: Dockerfile
     container_name: research-backend-python
-    restart: unless-stopped
+    restart: unless-stopped        #Mac Restarts --> Docker Starts FastAPI Again
     ports:
       - "8000:8000"
     env_file:
       - ./BackEnd/.env
+    environment:
+      - REDIS_HOST=redis
+      - DATABASE_URL=postgresql+asyncpg://swayam:PGSQLpw#1@postgres:5432/postgres
     depends_on:
       postgres:
         condition: service_healthy
     # Uncomment once Dockerfile is ready:
-    # command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 volumes:
   pgdata:
+  redisdata:
