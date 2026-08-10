@@ -59,6 +59,7 @@ async def _update_query_status(
     status: str,
     *,
     sources_failed: list[str] | None = None,
+    error_message: str | None = None,
 ) -> None:
     """Best-effort update of the queries row in Postgres."""
     try:
@@ -73,8 +74,8 @@ async def _update_query_status(
                 )
             elif status == "error":
                 await conn.execute(
-                    "UPDATE queries SET status = $1 WHERE id = $2",
-                    status, job_id,
+                    "UPDATE queries SET status = $1, error_message = $2 WHERE id = $3",
+                    status, error_message, job_id,
                 )
             else:
                 # "running", etc.
@@ -107,8 +108,8 @@ async def process_research_job(job, token):
             job_id, "running", sources_failed=sources_failed or None,
         )
         return result
-    except Exception:
-        await _update_query_status(job_id, "error")
+    except Exception as exc:
+        await _update_query_status(job_id, "error", error_message=str(exc))
         raise                                         # re-raise to let BullMQ know it failed
 
 
@@ -124,8 +125,8 @@ async def process_query_job(job, token):
         result = await run_query_pipeline(job)
         await _update_query_status(job_id, "done")
         return result
-    except Exception:
-        await _update_query_status(job_id, "error")
+    except Exception as exc:
+        await _update_query_status(job_id, "error", error_message=str(exc))
         raise                                         # re-raise to let BullMQ know it failed
 
 

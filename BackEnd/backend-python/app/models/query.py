@@ -21,5 +21,6 @@ class Query(Base):
     status = Column(String(20), default="pending")
     sources_requested = Column(ARRAY(Text))
     sources_failed = Column(ARRAY(Text))
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime(timezone=True), nullable=True)

@@ -125,14 +125,16 @@ async def run_pipeline(job) -> dict:
         failed = [s for s, res in final_sources.items() if res.get("status") == "failed"]  #appends failed sources to `failed` list if any
         
         # Emit terminal progress event for each source that was fetched in this run
-        for s in sources:
-            s_res = final_sources.get(s, {})
-            await _emit(job, {
+        for source in sources:
+            src_res = final_sources.get(source, {})
+            evt = {
                 "type": "progress",
-                "source": s,
-                "status": s_res.get("status", "error"),
-                # We don't track per-source chunk metrics right now, so omit counts
-            })
+                "source": source,
+                "status": src_res.get("status", "error"),
+            }
+            if src_res.get("error"):
+                evt["error"] = src_res["error"]
+            await _emit(job, evt)
 
         # Build results dict (what gets returned to BullMQ)
         job_results = {}

@@ -82,7 +82,7 @@ async function submitQuery(req, res, next) {
     } catch (redisErr) {
       // If Redis is down, mark job as error immediately
       await db.query(
-        "UPDATE queries SET status = 'error' WHERE id = $1",
+        "UPDATE queries SET status = 'error', error_message = 'Failed to enqueue job (Redis unavailable)' WHERE id = $1",
         [jobId]
       );
       return res.status(502).json({
@@ -112,7 +112,7 @@ async function getJobStatus(req, res, next) {
     const userId = req.user.userId;
 
     const { rows } = await db.query(
-      `SELECT id, query_text, status, sources_requested, sources_failed, created_at, completed_at
+      `SELECT id, query_text, status, sources_requested, sources_failed, error_message, created_at, completed_at
        FROM queries
        WHERE id = $1 AND user_id = $2`,
       [jobId, userId]
@@ -297,7 +297,7 @@ async function retryJob(req, res, next) {
     }
 
     await db.query(                                            // Reset database status to "pending" && clear sources_failed
-      "UPDATE queries SET status = 'pending', sources_failed = NULL, completed_at = NULL WHERE id = $1",
+      "UPDATE queries SET status = 'pending', sources_failed = NULL, error_message = NULL, completed_at = NULL WHERE id = $1",
       [jobId]
     );
 
@@ -340,7 +340,7 @@ async function retryJob(req, res, next) {
       });
     } catch (redisErr) {
       await db.query(
-        "UPDATE queries SET status = 'error' WHERE id = $1",
+        "UPDATE queries SET status = 'error', error_message = 'Failed to enqueue job (Redis unavailable)' WHERE id = $1",
         [jobId]
       );
       return res.status(502).json({

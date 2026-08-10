@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS queries (
     status VARCHAR(20) DEFAULT 'pending', -- pending | running | done | error
     sources_requested TEXT[],             -- e.g. {reddit,youtube,wikipedia,news}
     sources_failed TEXT[],
+    error_message TEXT,
+
     created_at TIMESTAMPTZ DEFAULT now(),
     completed_at TIMESTAMPTZ
 );

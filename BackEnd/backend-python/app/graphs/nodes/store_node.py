@@ -23,7 +23,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import async_session
-from app.graphs.state import ResearchState
+from app.graphs.state import ResearchState, SourceDoc
 
 logger = logging.getLogger(__name__)
 

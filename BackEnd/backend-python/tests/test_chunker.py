@@ -1,7 +1,7 @@
 """Tests for the token-aware chunker."""
 
 import pytest
-from app.ingestion.chunker import chunk_document, CHUNK_SIZE_TOKENS, CHUNK_OVERLAP_TOKENS
+from app.ingestion.chunker import chunk_document, CHUNK_SIZE_CHARS, CHUNK_OVERLAP_CHARS
 
 def test_empty_text():
     assert chunk_document("") == []
@@ -30,7 +30,7 @@ def test_long_text_overlap():
     assert len(chunks) >= 2
     
     # First chunk should be around the target chunk size
-    assert chunks[0].token_count <= CHUNK_SIZE_TOKENS
+    assert chunks[0].token_count <= (CHUNK_SIZE_CHARS // 4)
     
     # Ensure sequential index
     assert chunks[0].chunk_index == 0
@@ -57,5 +57,5 @@ def test_no_natural_split_points():
     
     assert len(chunks) >= 2
     for chunk in chunks:
-        assert chunk.token_count <= CHUNK_SIZE_TOKENS
+        assert chunk.token_count <= (CHUNK_SIZE_CHARS // 4)
         assert set(chunk.chunk_text) == {"a"}  # Only contains 'a's

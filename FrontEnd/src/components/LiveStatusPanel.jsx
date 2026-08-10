@@ -94,6 +94,7 @@ function reducer(state, action) {
               [evt.source]: {
                 status: evt.status || 'started',
                 counts: evt.counts || state.sources[evt.source]?.counts,
+                error: evt.error || state.sources[evt.source]?.error,
               },
             },
           };
@@ -107,6 +108,7 @@ function reducer(state, action) {
             [evt.source]: {
               status: evt.status || 'started',
               counts: evt.counts || state.stages[evt.source]?.counts,
+              error: evt.error || state.stages[evt.source]?.error,
             },
           },
         };
@@ -306,7 +308,16 @@ export default function LiveStatusPanel({ jobId, onDone, onViewReport }) {
                     {status === 'pending' && 'Waiting…'}
                     {status === 'started' && 'Fetching…'}
                     {status === 'done' && 'Complete'}
-                    {(status === 'failed' || status === 'error') && 'Failed'}
+                    {(status === 'failed' || status === 'error') && (
+                      <>
+                        Failed
+                        {sourceState?.error && (
+                          <div style={{ color: 'var(--status-failed)', fontSize: '0.8rem', marginTop: 4 }}>
+                            {sourceState.error}
+                          </div>
+                        )}
+                      </>
+                    )}
                     {/*
                       KNOWN GAP: reddit and youtube nodes are placeholder implementations
                       that return mock data. There is no is_mock flag in the event payload.
@@ -358,7 +369,16 @@ export default function LiveStatusPanel({ jobId, onDone, onViewReport }) {
                         )}
                       </>
                     )}
-                    {(status === 'failed' || status === 'error') && 'Failed'}
+                    {(status === 'failed' || status === 'error') && (
+                      <>
+                        Failed
+                        {stageState?.error && (
+                          <div style={{ color: 'var(--status-failed)', fontSize: '0.8rem', marginTop: 4 }}>
+                            {stageState.error}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

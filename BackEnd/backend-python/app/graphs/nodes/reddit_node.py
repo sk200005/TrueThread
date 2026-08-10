@@ -32,17 +32,7 @@ async def reddit_fetch(state: ResearchState) -> dict[str, Any]:
     documents: list[SourceDoc] = []
 
     try:
-        # TODO: Implement actual Reddit API fetching
-        # For now, simulate a successful fetch with a dummy document
-        doc: SourceDoc = {
-            "source": "reddit",
-            "author": "u/placeholder",
-            "text": f"Reddit discussion about {query} (Placeholder text)",
-            "url": f"https://reddit.com/search?q={query}",
-            "published_at": None,
-            "engagement_metrics": {"upvotes": 100},
-        }
-        documents.append(doc)
+        raise RuntimeError("Simulated Reddit API timeout for error visibility testing")
         logger.info("Fetched Reddit post (placeholder).")
 
     except Exception as exc:
