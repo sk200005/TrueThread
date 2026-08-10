@@ -26,15 +26,10 @@ class Settings(BaseSettings):
     # ── Server ────────────────────────────────────────────────────────────
     python_service_port: int = 8000
 
-    # ── Embedding (Legacy Local) ──────────────────────────────────────────
-    # Model used by sentence-transformers (384 dims).
+    # ── Embedding (Local) ─────────────────────────────────────────────────
+    # sentence-transformers model used for all embedding (384 dims).
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
-
-    # ── Embedding (OpenAI) ────────────────────────────────────────────────
-    # Model used by the new RAG ingestion pipeline (1536 dims).
-    openai_api_key: str = ""
-    openai_embedding_model: str = "text-embedding-3-small"
 
     # ── Groq LLM Model ───────────────────────────────────────────────────
     # Model used for summarization and claim extraction (via OpenAI-compatible API).

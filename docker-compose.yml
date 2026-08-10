@@ -9,7 +9,7 @@ services:
     container_name: research-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: swayam
       POSTGRES_PASSWORD: "PGSQLpw#1"
@@ -54,7 +54,7 @@ services:
       - ./BackEnd/.env
     environment:
       - REDIS_HOST=redis
-      - DATABASE_URL=postgresql+asyncpg://swayam:PGSQLpw#1@postgres:5432/postgres
+      - DATABASE_URL=postgresql+asyncpg://swayam:PGSQLpw%231@postgres:5432/postgres
     depends_on:
       postgres:
         condition: service_healthy

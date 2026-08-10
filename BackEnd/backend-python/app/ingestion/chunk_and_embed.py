@@ -200,7 +200,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run the chunking and embedding pipeline.")
     parser.add_argument("--source-type", type=str, required=True, help="all | reddit | youtube | wikipedia")
     parser.add_argument("--limit", type=int, default=None, help="Max number of documents to process.")
-    parser.add_argument("--dry-run", action="store_true", help="Chunk only, do not call OpenAI or write to DB.")
+    parser.add_argument("--dry-run", action="store_true", help="Chunk only, do not embed or write to DB.")
     args = parser.parse_args()
 
     asyncio.run(run_pipeline(

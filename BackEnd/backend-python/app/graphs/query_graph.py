@@ -138,6 +138,7 @@ async def run_query_pipeline(job) -> dict:
         initial_state: QueryState = {
             "job_id": job_id,
             "query": query_text,
+            "query_id": job_id,
             "top_k": 8,
         }
 

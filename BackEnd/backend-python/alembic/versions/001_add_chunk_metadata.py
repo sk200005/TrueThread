@@ -23,10 +23,8 @@ def upgrade() -> None:
     op.add_column('document_chunks', sa.Column('chunk_index', sa.Integer(), nullable=True))
     op.add_column('document_chunks', sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
 
-    # Also, alter the embedding column to be 1536 if it's not already, to match OpenAI.
-    # Note: schema.sql already defines it as 1536, but if a previous task altered it to 384, we revert it here.
-    # We do a raw execute so it works regardless of whether the column is currently 384 or 1536.
-    op.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(1536)")
+    # Ensure embedding column is vector(384) to match all-MiniLM-L6-v2.
+    op.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(384)")
 
 
 def downgrade() -> None:

@@ -144,8 +144,9 @@ async def run_pipeline(job) -> dict:
         job_results["total_docs_inserted"] = docs_count
         job_results["total_chunks_inserted"] = chunks_count
 
-        # Emit terminal event — Node closes the SSE stream on receiving this
-        await _emit(job, {"type": "done", "status": "done", "results": job_results})
+        # Node.js listens for queryQueue's done event now.
+        # Do not emit a terminal event here so the SSE stream stays open.
+        # await _emit(job, {"type": "done", "status": "done", "results": job_results})
 
         logger.info(
             "Job %s completed: %d docs, %d chunks, failed=%s",

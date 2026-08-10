@@ -104,7 +104,7 @@ async def process_research_job(job, token):
         result = await run_pipeline(job)
         sources_failed = result.get("sources_failed", [])
         await _update_query_status(
-            job_id, "done", sources_failed=sources_failed or None,
+            job_id, "running", sources_failed=sources_failed or None,
         )
         return result
     except Exception:

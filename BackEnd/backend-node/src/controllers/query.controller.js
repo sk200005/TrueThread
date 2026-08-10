@@ -19,10 +19,12 @@
  *   directly from Redis queues ('research' and 'query').
  */
 
-const { Job } = require('bullmq');
+const { Job, FlowProducer } = require('bullmq');
 const db = require('../db/client');
 const { researchQueue, researchQueueEvents } = require('../queues/researchQueue');
 const { queryQueue, queryQueueEvents } = require('../queues/queryQueue');
+
+const flowProducer = new FlowProducer({ connection: researchQueue.opts.connection });
 
 /**
  * POST /api/queries
@@ -50,17 +52,32 @@ async function submitQuery(req, res, next) {
     );
     const jobId = rows[0].id;
 
-    // 2. Enqueue the job to Redis via BullMQ.
-    //    The Python worker picks it up and runs the LangGraph pipeline.
-    //    Using our Postgres UUID as BullMQ's jobId so events can be correlated.
+    // 2. Enqueue the jobs to Redis via BullMQ using FlowProducer.
+    //    query-job depends on research-job.
     try {
-      await researchQueue.add('research-job', {
-        jobId,
-        userId,
-        queryText: queryText.trim(),
-        sources: sourcesRequested,
-      }, {
-        jobId,  // Use our UUID as BullMQ's internal job ID
+      await flowProducer.add({
+        name: 'query-job',
+        queueName: 'query',
+        data: {
+          jobId,
+          userId,
+          queryText: queryText.trim(),
+          sources: sourcesRequested,
+        },
+        opts: { jobId },
+        children: [
+          {
+            name: 'research-job',
+            queueName: 'research',
+            data: {
+              jobId,
+              userId,
+              queryText: queryText.trim(),
+              sources: sourcesRequested,
+            },
+            opts: { jobId },
+          }
+        ]
       });
     } catch (redisErr) {
       // If Redis is down, mark job as error immediately
@@ -211,7 +228,6 @@ async function streamJobProgress(req, res) {
 
   // Listen on both queues — jobIds are globally unique UUIDs, so no conflict.
   researchQueueEvents.on('progress', handleProgress);
-  researchQueueEvents.on('completed', handleCompleted);
   researchQueueEvents.on('failed', handleFailed);
   queryQueueEvents.on('progress', handleProgress);
   queryQueueEvents.on('completed', handleCompleted);
@@ -226,7 +242,6 @@ async function streamJobProgress(req, res) {
     if (closed) return;
     closed = true;
     researchQueueEvents.off('progress', handleProgress);
-    researchQueueEvents.off('completed', handleCompleted);
     researchQueueEvents.off('failed', handleFailed);
     queryQueueEvents.off('progress', handleProgress);
     queryQueueEvents.off('completed', handleCompleted);
@@ -293,17 +308,35 @@ async function retryJob(req, res, next) {
 
     // Re-enqueue to Redis via BullMQ
     try {
-      // Remove the old failed job from Redis so we can reuse the same jobId
-      const oldJob = await Job.fromId(researchQueue, jobId);
-      if (oldJob) await oldJob.remove();
+      // Remove the old failed jobs from Redis so we can reuse the same jobId
+      const oldResearchJob = await Job.fromId(researchQueue, jobId);
+      if (oldResearchJob) await oldResearchJob.remove();
+      const oldQueryJob = await Job.fromId(queryQueue, jobId);
+      if (oldQueryJob) await oldQueryJob.remove();
 
-      await researchQueue.add('research-job', {
-        jobId,
-        userId,
-        queryText: job.query_text,
-        sources: sourcesToRetry,
-      }, {
-        jobId,
+      await flowProducer.add({
+        name: 'query-job',
+        queueName: 'query',
+        data: {
+          jobId,
+          userId,
+          queryText: job.query_text,
+          sources: sourcesToRetry,
+        },
+        opts: { jobId },
+        children: [
+          {
+            name: 'research-job',
+            queueName: 'research',
+            data: {
+              jobId,
+              userId,
+              queryText: job.query_text,
+              sources: sourcesToRetry,
+            },
+            opts: { jobId },
+          }
+        ]
       });
     } catch (redisErr) {
       await db.query(

@@ -131,6 +131,6 @@ Specifically:
 | Risk | Mitigation |
 |------|-----------|
 | Wikipedia API rate limits | `wikipedia-api` package handles retries; we fetch ≤5 articles per query |
-| Embedding model mismatch with existing DB schema | Using `all-MiniLM-L6-v2` (384 dims); existing `VECTOR(1536)` column needs ALTER |
+| Embedding model mismatch with existing DB schema | RESOLVED — unified on `all-MiniLM-L6-v2` (384 dims); schema uses `VECTOR(384)` |
 | SSE format mismatch between Python and Node | Python emits `data: {JSON}\n\n` — tested against Node's `pythonServiceClient.js` parser byte-for-byte |
 | Dual-write period (both Node and Python can write to same tables) | Wikipedia writes to `source_documents` with `source='wikipedia'` — no overlap with existing Reddit/YouTube data |

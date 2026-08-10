@@ -3,7 +3,7 @@ Alembic environment configuration for async SQLAlchemy.
 
 NOTE: The existing tables (queries, source_documents, document_chunks, etc.)
 were created via BackEnd/schema.sql. Alembic is set up here for future
-migrations (e.g., altering the embedding column dimension from 1536 to 384).
+migrations. Embedding column uses vector(384) for all-MiniLM-L6-v2.
 """
 
 import asyncio

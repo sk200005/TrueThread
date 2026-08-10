@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     source_document_id UUID REFERENCES source_documents(id) ON DELETE CASCADE,
     query_id UUID REFERENCES queries(id) ON DELETE CASCADE,  -- denormalized for faster scoped search
     chunk_text TEXT NOT NULL,
-    embedding VECTOR(1536),               -- dimension matches embedding model (e.g. text-embedding-3-small)
+    embedding VECTOR(384),                -- dimension matches embedding model (all-MiniLM-L6-v2)
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
