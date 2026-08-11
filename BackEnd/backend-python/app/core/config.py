@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://swayam:PGSQLpw#1@localhost:5432/postgres"
 
+    # ── YouTube API ───────────────────────────────────────────────────────
+    youtube_api_key: str = ""
+
     # ── Groq LLM (OpenAI-compatible) ──────────────────────────────────────
     groq_api_key: str = ""
 

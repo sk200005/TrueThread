@@ -194,8 +194,8 @@ async function main() {
       }
     }
     
-    // Save the output to reddit-results.json
-    const outputPath = 'reddit-results.json';
+    // Save the output to reddit-results.json (always in the reddit-collector/ dir)
+    const outputPath = require('path').join(__dirname, 'reddit-results.json');
     fs.writeFileSync(outputPath, JSON.stringify(finalResults, null, 2), 'utf8');
     console.log(`\nSuccessfully scraped ${finalResults.length} posts and saved results to ${outputPath}`);
 

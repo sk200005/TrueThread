@@ -112,6 +112,7 @@ export default function App() {
     setView('idle');
     setActiveJobId(null);
     setActiveReportId(null);
+    refreshHistory(); // Reload sidebar so newly completed jobs appear
   }
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -224,19 +225,32 @@ function ReportViewerWithLookup({ reportId, queryId, onBack }) {
     if (!queryId) return;
 
     let cancelled = false;
+    // The Python worker saves the report to DB just before emitting the
+    // SSE 'done' event. There can be a small race where the frontend
+    // arrives here before the DB write commits. Retry up to 5 times
+    // with a 1 s delay to handle this gracefully.
     async function lookup() {
       setLooking(true);
-      try {
-        const reports = await _listReports();
-        const match = reports.find((r) => r.query_id === queryId);
-        if (!cancelled && match) {
-          setResolvedReportId(match.id);
+      const MAX_RETRIES = 5;
+      const RETRY_DELAY_MS = 1000;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        if (cancelled) break;
+        try {
+          const reports = await _listReports();
+          const match = reports.find((r) => r.query_id === queryId);
+          if (match) {
+            if (!cancelled) setResolvedReportId(match.id);
+            break; // Found it — stop retrying
+          }
+        } catch {
+          // Network error — still retry
         }
-      } catch {
-        // Ignore — will show error state in ReportViewer
-      } finally {
-        if (!cancelled) setLooking(false);
+        if (attempt < MAX_RETRIES - 1) {
+          // Wait before next retry
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        }
       }
+      if (!cancelled) setLooking(false);
     }
     lookup();
     return () => { cancelled = true; };

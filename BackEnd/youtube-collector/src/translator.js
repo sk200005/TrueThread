@@ -55,7 +55,11 @@ async function translateInChunks(text) {
 
   const results = [];
   for (const chunk of chunks) {
-    const res = await translate(chunk, { to: 'en' });
+    const translatePromise = translate(chunk, { to: 'en' });
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Translation API timed out after 10 seconds')), 10000)
+    );
+    const res = await Promise.race([translatePromise, timeoutPromise]);
     results.push(res.text);
   }
 
