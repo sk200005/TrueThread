@@ -113,8 +113,9 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
                 if not chunks:
                     continue
 
-                # 3. Generate embeddings for all chunks in one batch call
-                embeddings = model.encode(chunks, show_progress_bar=False)
+                # 3. Generate embeddings for all chunks in one batch call in a background thread
+                import asyncio
+                embeddings = await asyncio.to_thread(model.encode, chunks, show_progress_bar=False)
 
                 # 4. Insert chunk rows with embeddings
                 for chunk_text, embedding in zip(chunks, embeddings):

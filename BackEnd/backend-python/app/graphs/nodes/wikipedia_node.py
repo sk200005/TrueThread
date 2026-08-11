@@ -81,7 +81,10 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
 
 
     try:
-        titles = _search_wikipedia(query)
+        import asyncio
+        loop = asyncio.get_running_loop()
+        
+        titles = await asyncio.to_thread(_search_wikipedia, query)
         logger.info("Wikipedia search returned %d titles: %s", len(titles), titles)
 
         if not titles:
@@ -96,40 +99,37 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
                 }
             }
 
+        def _fetch_page(title: str) -> SourceDoc | None:
+            page = _wiki.page(title)
+            if not page.exists():
+                logger.debug("Wikipedia page does not exist: %s", title)
+                return None
+            
+            # Skip disambiguation pages — they're lists, not content
+            if "disambiguation" in (page.summary or "").lower() and len(page.text) < 500:
+                logger.debug("Skipping disambiguation page: %s", title)
+                return None
+
+            text = page.text
+            if not text or len(text.strip()) < 100:
+                logger.debug("Skipping page with insufficient content: %s", title)
+                return None
+
+            return {
+                "source": "wikipedia",
+                "author": None,
+                "text": text,
+                "url": page.fullurl,
+                "published_at": None,
+                "engagement_metrics": None,
+            }
+
         for title in titles[:MAX_ARTICLES]:
             try:
-                page = _wiki.page(title)
-
-                if not page.exists():
-                    logger.debug("Wikipedia page does not exist: %s", title)
-                    continue
-
-                # Skip disambiguation pages — they're lists, not content
-                if "disambiguation" in (page.summary or "").lower() and len(page.text) < 500:
-                    logger.debug("Skipping disambiguation page: %s", title)
-                    continue
-
-                text = page.text
-                if not text or len(text.strip()) < 100:
-                    logger.debug("Skipping page with insufficient content: %s", title)
-                    continue
-
-                doc: SourceDoc = {
-                    "source": "wikipedia",
-                    "author": None,
-                    "text": text,
-                    "url": page.fullurl,
-                    "published_at": None,  # Wikipedia doesn't expose a single publish date
-                    "engagement_metrics": None,
-                }
-                documents.append(doc)
-
-                logger.info(
-                    "Fetched Wikipedia article: %s (%d chars)",
-                    title,
-                    len(text),
-                )
-
+                doc = await asyncio.to_thread(_fetch_page, title)
+                if doc:
+                    documents.append(doc)
+                    logger.info("Fetched Wikipedia article: %s (%d chars)", title, len(doc["text"]))
             except Exception as exc:
                 logger.warning("Failed to fetch Wikipedia page '%s': %s", title, exc)
                 continue

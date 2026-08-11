@@ -169,7 +169,8 @@ async def wiki_verify(state: QueryState) -> dict[str, Any]:
         entities = claim.get("entities", [])
 
         # Search Wikipedia for relevant articles
-        titles = _search_wikipedia_for_claim(claim_text, entities)
+        import asyncio
+        titles = await asyncio.to_thread(_search_wikipedia_for_claim, claim_text, entities)
 
         if not titles:
             logger.info("  No Wikipedia articles found for: %s", claim_text[:40])
@@ -186,7 +187,7 @@ async def wiki_verify(state: QueryState) -> dict[str, Any]:
         # Fetch the best (first) matching page
         page_result = None
         for title in titles:
-            page_result = _fetch_page_context(title)
+            page_result = await asyncio.to_thread(_fetch_page_context, title)
             if page_result:
                 break
 
