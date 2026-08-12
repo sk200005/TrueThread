@@ -62,8 +62,12 @@ export default function QueryHistory({ activeJobId, onSelectJob, onSelectReport,
   // Merge: show local in-progress jobs that don't have a report yet
   const reportQueryIds = new Set(reports.map((r) => r.query_id));
 
+  // Show local jobs that either:
+  //  - are still running/pending/error (not yet done), OR
+  //  - are done but don't have a report in the API yet (report save may be in flight)
+  // Only hide a local job once its report shows up from the API.
   const inProgressJobs = localJobs.filter(
-    (j) => !reportQueryIds.has(j.jobId) && j.status !== 'done'
+    (j) => !reportQueryIds.has(j.jobId)
   );
 
   const hasItems = inProgressJobs.length > 0 || reports.length > 0;
