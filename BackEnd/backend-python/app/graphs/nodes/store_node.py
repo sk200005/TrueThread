@@ -94,10 +94,15 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
                 try:
                     # 1. Insert source_document row
                     doc_id = uuid.uuid4()
+                    
+                    import json
+                    eng_metrics = doc.get("engagement_metrics")
+                    eng_metrics_json = json.dumps(eng_metrics) if eng_metrics else None
+
                     await session.execute(
                         text("""
-                            INSERT INTO source_documents (id, query_id, source, author, text, url, published_at, created_at)
-                            VALUES (:id, :query_id, :source, :author, :text, :url, :published_at, now())
+                            INSERT INTO source_documents (id, query_id, source, author, text, url, published_at, engagement_metrics, created_at)
+                            VALUES (:id, :query_id, :source, :author, :text, :url, :published_at, :engagement_metrics, now())
                         """),
                         {
                             "id": str(doc_id),
@@ -107,6 +112,7 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
                             "text": doc["text"],
                             "url": doc.get("url"),
                             "published_at": doc.get("published_at"),
+                            "engagement_metrics": eng_metrics_json,
                         },
                     )
                     docs_inserted += 1
