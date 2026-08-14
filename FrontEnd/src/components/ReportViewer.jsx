@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getReport } from '../api/client.js';
+import Chatbot from './Chatbot.jsx';
 
 /**
  * ReportViewer — Renders a completed research report.
@@ -288,6 +289,9 @@ export default function ReportViewer({ reportId, onBack }) {
           );
         })}
       </div>
+
+      {/* RAG Chatbot */}
+      <Chatbot jobId={report.query_id} />
     </div>
   );
 }

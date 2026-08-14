@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 
 from app.worker import start_workers, stop_workers
+from app.routers import chat
 
 # ── Logging ───────────────────────────────────────────────────────────────
 logging.basicConfig(                 #Whenever something is logged, print it in this format.
@@ -59,6 +60,7 @@ app.add_middleware(
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────
+app.include_router(chat.router)
 
 @app.get("/health")
 async def health():

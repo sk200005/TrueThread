@@ -134,6 +134,19 @@ export async function stopJob(jobId) {
   });
 }
 
+/**
+ * POST /api/queries/:jobId/chat
+ * @param {string} jobId
+ * @param {string} message
+ * @returns {{ response: string }}
+ */
+export async function chatWithQuery(jobId, message) {
+  return apiFetch(`/api/queries/${jobId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
 // ── Reports ──────────────────────────────────────────────────────────
 
 /**

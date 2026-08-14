@@ -8,6 +8,7 @@ const {
   streamJobProgress,
   retryJob,
   stopJob,
+  chatWithQuery,
 } = require('../controllers/query.controller');
 
 const router = express.Router();
@@ -26,5 +27,8 @@ router.post('/:jobId/retry', authenticate, retryJob);
 
 // POST /api/queries/:jobId/stop — cancel a job
 router.post('/:jobId/stop', authenticate, stopJob);
+
+// POST /api/queries/:jobId/chat — RAG Chatbot
+router.post('/:jobId/chat', authenticate, chatWithQuery);
 
 module.exports = router;

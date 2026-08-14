@@ -23,6 +23,9 @@ const { Job, FlowProducer } = require('bullmq');
 const db = require('../db/client');
 const { researchQueue, researchQueueEvents } = require('../queues/researchQueue');
 const { queryQueue, queryQueueEvents } = require('../queues/queryQueue');
+const axios = require('axios');
+
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 const flowProducer = new FlowProducer({ connection: researchQueue.opts.connection });
 
@@ -424,4 +427,47 @@ function sendEvent(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-module.exports = { submitQuery, getJobStatus, streamJobProgress, retryJob, stopJob };
+/**
+ * POST /api/queries/:jobId/chat
+ * Proxies chat requests to the python backend for RAG answering.
+ */
+async function chatWithQuery(req, res, next) {
+  try {
+    const { jobId } = req.params;
+    const { message } = req.body;
+    const userId = req.user.userId;
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    // Verify ownership
+    const { rows } = await db.query(
+      `SELECT id FROM queries WHERE id = $1 AND user_id = $2`,
+      [jobId, userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // Proxy to python backend
+    const response = await axios.post(`${PYTHON_SERVICE_URL}/api/chat/`, {
+      query_id: jobId,
+      message: message.trim()
+    });
+
+    return res.status(200).json(response.data);
+  } catch (err) {
+    if (err.response) {
+      const errorData = err.response.data || {};
+      if (errorData.detail && !errorData.error) {
+        errorData.error = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+      }
+      return res.status(err.response.status).json(errorData);
+    }
+    next(err);
+  }
+}
+
+module.exports = { submitQuery, getJobStatus, streamJobProgress, retryJob, stopJob, chatWithQuery };
