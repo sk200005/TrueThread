@@ -158,14 +158,13 @@ async function streamJobProgress(req, res) {
 
   // ── Check if job already completed/failed before SSE connected ────────
   try {
-    let existingJob = await Job.fromId(researchQueue, jobId);
-    if (!existingJob) existingJob = await Job.fromId(queryQueue, jobId);
+    const qJob = await Job.fromId(queryQueue, jobId);
+    const rJob = await Job.fromId(researchQueue, jobId);
 
-    if (existingJob) {
-      const state = await existingJob.getState();
-
-      if (state === 'completed') {
-        const results = existingJob.returnvalue || {};
+    if (qJob) {
+      const qState = await qJob.getState();
+      if (qState === 'completed') {
+        const results = qJob.returnvalue || {};
         sendEvent(res, {
           type: 'done', jobId, status: 'done', results,
           timestamp: new Date().toISOString(),
@@ -173,16 +172,30 @@ async function streamJobProgress(req, res) {
         res.end();
         return;
       }
-
-      if (state === 'failed') {
+      if (qState === 'failed') {
         sendEvent(res, {
           type: 'error', jobId, status: 'error',
-          error: existingJob.failedReason,
+          error: qJob.failedReason,
           timestamp: new Date().toISOString(),
         });
         res.end();
         return;
       }
+    }
+
+    if (rJob) {
+      const rState = await rJob.getState();
+      if (rState === 'failed') {
+        sendEvent(res, {
+          type: 'error', jobId, status: 'error',
+          error: rJob.failedReason,
+          timestamp: new Date().toISOString(),
+        });
+        res.end();
+        return;
+      }
+      // If research job is completed but query job is not, do nothing here.
+      // We will rely on live events or subsequent polling to catch the query job completion.
     }
   } catch (lookupErr) {
     // Redis might be down — fall through to live listener, which will
