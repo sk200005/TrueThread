@@ -5,3 +5,13 @@ When feeding this to an AI coding assistant, a good opening instruction is:
 > "Using the architecture and schema in this document, scaffold the `/backend-node` Express service first: project structure, Prisma schema matching the SQL above, and the `/api/queries` and `/api/reports` routes with dummy controller logic (no Python integration yet). Don't touch `/backend-python` until I confirm the Node service runs."
 
 Building one vertical slice end-to-end (even with stubbed data) before wiring in real LangGraph logic keeps the AI assistant from generating a huge, broken, all-at-once codebase.
+
+
+1]  cd /Users/swayam/Desktop/Test
+    docker-compose up -d
+
+2]  cd /Users/swayam/Desktop/Test/BackEnd/backend-node
+    npm run dev
+
+3]  cd /Users/swayam/Desktop/Test/FrontEnd
+    npm run dev
