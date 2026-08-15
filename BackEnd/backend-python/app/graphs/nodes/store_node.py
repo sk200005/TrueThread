@@ -90,74 +90,74 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
         for doc in merged_documents:
             # Use a savepoint per document so one failure doesn't poison
             # the entire session and block all subsequent documents.
-            async with session.begin_nested():
                 try:
-                    # 1. Insert source_document row
-                    doc_id = uuid.uuid4()
-                    
-                    import json
-                    eng_metrics = doc.get("engagement_metrics")
-                    eng_metrics_json = json.dumps(eng_metrics) if eng_metrics else None
-
-                    await session.execute(
-                        text("""
-                            INSERT INTO source_documents (id, query_id, source, author, text, url, published_at, engagement_metrics, created_at)
-                            VALUES (:id, :query_id, :source, :author, :text, :url, :published_at, :engagement_metrics, now())
-                        """),
-                        {
-                            "id": str(doc_id),
-                            "query_id": job_id,
-                            "source": doc["source"],
-                            "author": doc.get("author"),
-                            "text": doc["text"],
-                            "url": doc.get("url"),
-                            "published_at": doc.get("published_at"),
-                            "engagement_metrics": eng_metrics_json,
-                        },
-                    )
-                    docs_inserted += 1
-
-                    # 2. Chunk the text
-                    chunks = _splitter.split_text(doc["text"])
-                    if not chunks:
-                        logger.info("Doc %s produced no chunks (text too short), skipping embedding.", doc_id)
-                        continue
-
-                    # 3. Generate embeddings in a background thread
-                    import asyncio
-                    embeddings = await asyncio.to_thread(model.encode, chunks, show_progress_bar=False)
-
-                    # 4. Insert chunk rows with embeddings
-                    for chunk_text, embedding in zip(chunks, embeddings):
-                        chunk_id = uuid.uuid4()
-                        # pgvector accepts the Python list directly as a string in
-                        # the format "[v1,v2,...]". Use json.dumps for correct formatting.
+                    async with session.begin_nested():
+                        # 1. Insert source_document row
+                        doc_id = uuid.uuid4()
+                        
                         import json
-                        embedding_str = json.dumps(embedding.tolist())
+                        eng_metrics = doc.get("engagement_metrics")
+                        eng_metrics_json = json.dumps(eng_metrics) if eng_metrics else None
+
                         await session.execute(
                             text("""
-                                INSERT INTO document_chunks
-                                    (id, source_document_id, query_id, chunk_text, embedding, created_at)
-                                VALUES (:id, :source_document_id, :query_id, :chunk_text, :embedding, now())
+                                INSERT INTO source_documents (id, query_id, source, author, text, url, published_at, engagement_metrics, created_at)
+                                VALUES (:id, :query_id, :source, :author, :text, :url, :published_at, :engagement_metrics, now())
                             """),
                             {
-                                "id": str(chunk_id),
-                                "source_document_id": str(doc_id),
+                                "id": str(doc_id),
                                 "query_id": job_id,
-                                "chunk_text": chunk_text,
-                                "embedding": embedding_str,
+                                "source": doc["source"],
+                                "author": doc.get("author"),
+                                "text": doc["text"],
+                                "url": doc.get("url"),
+                                "published_at": doc.get("published_at"),
+                                "engagement_metrics": eng_metrics_json,
                             },
                         )
-                        chunks_inserted += 1
+                        docs_inserted += 1
 
-                    logger.info(
-                        "Stored doc %s: %d chunks (source=%s, url=%s)",
-                        doc_id, len(chunks), doc["source"], doc.get("url", "N/A"),
-                    )
+                        # 2. Chunk the text
+                        chunks = _splitter.split_text(doc["text"])
+                        if not chunks:
+                            logger.info("Doc %s produced no chunks (text too short), skipping embedding.", doc_id)
+                            continue
+
+                        # 3. Generate embeddings in a background thread
+                        import asyncio
+                        embeddings = await asyncio.to_thread(model.encode, chunks, show_progress_bar=False)
+
+                        # 4. Insert chunk rows with embeddings
+                        for chunk_text, embedding in zip(chunks, embeddings):
+                            chunk_id = uuid.uuid4()
+                            # pgvector accepts the Python list directly as a string in
+                            # the format "[v1,v2,...]". Use json.dumps for correct formatting.
+                            import json
+                            embedding_str = json.dumps(embedding.tolist())
+                            await session.execute(
+                                text("""
+                                    INSERT INTO document_chunks
+                                        (id, source_document_id, query_id, chunk_text, embedding, created_at)
+                                    VALUES (:id, :source_document_id, :query_id, :chunk_text, :embedding, now())
+                                """),
+                                {
+                                    "id": str(chunk_id),
+                                    "source_document_id": str(doc_id),
+                                    "query_id": job_id,
+                                    "chunk_text": chunk_text,
+                                    "embedding": embedding_str,
+                                },
+                            )
+                            chunks_inserted += 1
+
+                        logger.info(
+                            "Stored doc %s: %d chunks (source=%s, url=%s)",
+                            doc_id, len(chunks), doc["source"], doc.get("url", "N/A"),
+                        )
 
                 except Exception as exc:
                     logger.error("Failed to store document (rolled back to savepoint): %s", exc)
-                    # Savepoint is automatically rolled back on exception exit
+                    # Savepoint is automatically rolled back by the context manager
                     continue
 
         await session.commit()

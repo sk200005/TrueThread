@@ -78,8 +78,9 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
             if video["publishedAt"]:
                 # Ensure it's valid ISO 8601, youtube returns e.g. 2021-03-12T14:32:00Z
                 try:
-                    # just keep as string for datetime parsing later if needed
-                    pub_date = datetime.fromisoformat(video["publishedAt"].replace('Z', '+00:00'))
+                    # keep as string, but validate
+                    dt = datetime.fromisoformat(video["publishedAt"].replace('Z', '+00:00'))
+                    pub_date = dt.isoformat()
                 except ValueError:
                     pass
 
