@@ -90,46 +90,7 @@ export default function QueryHistory({ activeJobId, onSelectJob, onSelectReport,
         </div>
       )}
 
-      {/* In-progress / errored jobs (from localStorage) */}
-      {inProgressJobs.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <div
-            style={{
-              padding: '8px 14px',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            In Progress
-          </div>
-          {inProgressJobs.map((job) => {
-            const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
-            return (
-              <div
-                key={job.jobId}
-                className={`history-item ${activeJobId === job.jobId ? 'active' : ''}`}
-                onClick={() => onSelectJob(job.jobId, job.queryText, job.status)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onSelectJob(job.jobId, job.queryText, job.status);
-                }}
-              >
-                <div className="history-item-query">{job.queryText}</div>
-                <div className="history-item-meta">
-                  <span className={`badge badge-status ${cfg.className}`}>
-                    {cfg.icon} {cfg.label}
-                  </span>
-                  <span>{formatTime(job.createdAt)}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* In-progress / errored jobs section removed as per user request */}
 
       {/* Completed jobs (from API reports) */}
       {reports.length > 0 && (

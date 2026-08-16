@@ -47,7 +47,18 @@ async function getReport(req, res, next) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    return res.json(rows[0]);
+    const report = rows[0];
+
+    const rawData = await db.query(
+      `SELECT id, source, author, text, url, published_at, engagement_metrics, created_at
+       FROM source_documents
+       WHERE query_id = $1
+       ORDER BY created_at ASC`,
+      [report.query_id]
+    );
+    report.raw_data = rawData.rows;
+
+    return res.json(report);
   } catch (err) {
     next(err);
   }

@@ -141,6 +141,7 @@ export default function ReportViewer({ reportId, onBack }) {
   const verifiedClaims = report.verified_claims || [];
   const sourcesRequested = report.sources_requested || [];
   const sourcesFailed = report.sources_failed || [];
+  const rawData = report.raw_data || [];
 
   return (
     <div className="animate-fade-in">
@@ -289,6 +290,34 @@ export default function ReportViewer({ reportId, onBack }) {
           );
         })}
       </div>
+
+      {/* Raw Data */}
+      {rawData.length > 0 && (
+        <div className="report-section">
+          <div className="report-section-title">Raw Data</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {rawData.map((data, idx) => (
+              <div key={idx} className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong>Source: <span style={{textTransform: 'capitalize'}}>{data.source}</span></strong>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{formatDate(data.published_at || data.created_at)}</span>
+                </div>
+                {data.author && <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Author: {data.author}</div>}
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem' }}>
+                  {data.text}
+                </div>
+                {data.url && (
+                  <div style={{ marginTop: '12px' }}>
+                    <a href={data.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', fontSize: '0.85rem' }}>
+                      View Original
+                    </a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* RAG Chatbot */}
       <Chatbot jobId={report.query_id} />
