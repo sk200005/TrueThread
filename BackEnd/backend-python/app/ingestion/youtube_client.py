@@ -136,7 +136,23 @@ def get_transcript(video_id: str) -> Optional[Dict[str, Any]]:
     Uses youtube_transcript_api (which handles translation natively).
     """
     try:
-        ytt_api = YouTubeTranscriptApi()
+        import os
+        import http.cookiejar
+        from requests import Session
+        
+        session = Session()
+        try:
+            # Resolves to /Users/swayam/Desktop/Test/BackEnd/backend-python/cookies.txt
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__))) 
+            cookies_path = os.path.join(base_dir, "cookies.txt")
+            if os.path.exists(cookies_path):
+                cookie_jar = http.cookiejar.MozillaCookieJar(cookies_path)
+                cookie_jar.load(ignore_discard=True, ignore_expires=True)
+                session.cookies.update(cookie_jar)
+        except Exception as e:
+            logger.warning("Failed to load cookies.txt: %s", e)
+            
+        ytt_api = YouTubeTranscriptApi(http_client=session)
         transcript_list = ytt_api.list(video_id)
         
         is_translated = False
