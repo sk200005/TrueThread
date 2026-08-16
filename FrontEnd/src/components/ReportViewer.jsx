@@ -76,6 +76,7 @@ export default function ReportViewer({ reportId, onBack }) {
   const [error, setError] = useState('');
   const [expandedClaims, setExpandedClaims] = useState(new Set());
   const [showFullReport, setShowFullReport] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
     async function loadReport() {
@@ -186,8 +187,35 @@ export default function ReportViewer({ reportId, onBack }) {
         rawData.length > 0 ? (
           <div className="report-section">
             <div className="report-section-title">Raw Data</div>
+            
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px' }}>
+              <button 
+                className={`btn btn-sm ${activeTab === 'all' ? 'btn-primary' : 'btn-ghost'}`} 
+                onClick={() => setActiveTab('all')}
+              >
+                All Sources
+              </button>
+              {['reddit', 'youtube', 'wikipedia'].map(src => {
+                if (!rawData.some(d => d.source === src)) return null;
+                let icon = '📄';
+                if (src === 'reddit') icon = '💬';
+                if (src === 'youtube') icon = '📺';
+                if (src === 'wikipedia') icon = '📚';
+                return (
+                  <button 
+                    key={src}
+                    className={`btn btn-sm ${activeTab === src ? 'btn-primary' : 'btn-ghost'}`} 
+                    onClick={() => setActiveTab(src)}
+                    style={{ textTransform: 'capitalize' }}
+                  >
+                    {icon} {src}
+                  </button>
+                );
+              })}
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {rawData.map((data, idx) => {
+              {rawData.filter(d => activeTab === 'all' || d.source === activeTab).map((data, idx) => {
                 let sourceIcon = '📄';
                 if (data.source === 'reddit') sourceIcon = '💬';
                 if (data.source === 'youtube') sourceIcon = '📺';

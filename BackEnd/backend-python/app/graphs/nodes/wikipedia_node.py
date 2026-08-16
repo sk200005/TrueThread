@@ -1,4 +1,4 @@
-"""
+="""
 graphs/nodes/wikipedia_node.py — Fetch Wikipedia content for a research query.
 
 Uses the `wikipedia-api` package (MediaWiki REST API wrapper) to:
@@ -28,7 +28,7 @@ MAX_ARTICLES = 5
 
 # wikipedia-api requires a descriptive user-agent per MediaWiki policy
 _wiki = wikipediaapi.Wikipedia(
-    user_agent="ReSearchPlatform/0.1 (research-project; contact@example.com)",
+    user_agent="SwayamsResearchApp/1.0 (swayam-test-app; swayam@example.com)",
     language="en",
 )
 
@@ -123,7 +123,7 @@ def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
     }
     try:
         headers = {
-            "User-Agent": "ReSearchPlatform/0.1 (research-project; contact@example.com)",
+            "User-Agent": "SwayamsResearchApp/1.0 (swayam-test-app; swayam@example.com)",
         }
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         resp.raise_for_status()
@@ -188,8 +188,8 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
                 logger.debug("Skipping disambiguation page: %s", title)
                 return None
 
-            text = page.text
-            if not text or len(text.strip()) < 100:
+            text = page.summary
+            if not text or len(text.strip()) < 50:
                 logger.debug("Skipping page with insufficient content: %s", title)
                 return None
 
