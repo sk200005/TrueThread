@@ -75,6 +75,7 @@ export default function ReportViewer({ reportId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedClaims, setExpandedClaims] = useState(new Set());
+  const [showFullReport, setShowFullReport] = useState(false);
 
   useEffect(() => {
     async function loadReport() {
@@ -157,6 +158,16 @@ export default function ReportViewer({ reportId, onBack }) {
           </button>
         )}
         <div className="report-query">&ldquo;{report.query_text}&rdquo;</div>
+        
+        <div style={{ marginTop: 12, marginBottom: 16 }}>
+          <button 
+             className="btn btn-primary" 
+             onClick={() => setShowFullReport(!showFullReport)}
+          >
+             {showFullReport ? '← Back to Raw Data' : '📊 View Generated Report'}
+          </button>
+        </div>
+
         <div className="report-meta">
           <span>📅 {formatDate(report.created_at)}</span>
           <span>
@@ -170,157 +181,177 @@ export default function ReportViewer({ reportId, onBack }) {
         </div>
       </div>
 
-      {/* Sentiment */}
-      <div className="report-section">
-        <div className="report-section-title">Overall Sentiment</div>
-        <div className={`sentiment-badge-large ${sentimentCfg.className}`}>
-          <span>{sentimentCfg.icon}</span>
-          <span>{sentimentLabel}</span>
-        </div>
-      </div>
+      {!showFullReport ? (
+        /* Raw Data */
+        rawData.length > 0 ? (
+          <div className="report-section">
+            <div className="report-section-title">Raw Data</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {rawData.map((data, idx) => {
+                let sourceIcon = '📄';
+                if (data.source === 'reddit') sourceIcon = '💬';
+                if (data.source === 'youtube') sourceIcon = '📺';
+                if (data.source === 'wikipedia') sourceIcon = '📚';
 
-      {/* Themes */}
-      {themes.length > 0 && (
-        <div className="report-section">
-          <div className="report-section-title">Themes</div>
-          <div className="themes-list">
-            {themes.map((t, i) => (
-              <div key={i} className="theme-chip">
-                <span>🏷️</span>
-                <span>{t.theme}</span>
-              </div>
-            ))}
+                return (
+                  <div key={idx} className="glass-panel" style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{sourceIcon}</span>
+                        <span style={{textTransform: 'capitalize'}}>{data.source}</span>
+                      </strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{formatDate(data.published_at || data.created_at)}</span>
+                    </div>
+                    {data.author && <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>Author: {data.author}</div>}
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                      {data.text}
+                    </div>
+                    {data.url && (
+                      <div style={{ marginTop: '12px' }}>
+                        <a href={data.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', fontSize: '0.85rem', textDecoration: 'none', fontWeight: 600 }}>
+                          View Original ↗
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Verified Claims */}
-      <div className="report-section">
-        <div className="report-section-title">
-          Verified Claims ({verifiedClaims.length})
-        </div>
-
-        {verifiedClaims.length === 0 && (
+        ) : (
           <div className="glass-panel" style={{ textAlign: 'center', padding: 24 }}>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              No claims were extracted for this report.
+              No raw data available for this query.
             </p>
           </div>
-        )}
+        )
+      ) : (
+        <>
+          {/* Sentiment */}
+          <div className="report-section">
+            <div className="report-section-title">Overall Sentiment</div>
+            <div className={`sentiment-badge-large ${sentimentCfg.className}`}>
+              <span>{sentimentCfg.icon}</span>
+              <span>{sentimentLabel}</span>
+            </div>
+          </div>
 
-        {verifiedClaims.map((claim, idx) => {
-          const vcfg = VERDICT_CONFIG[claim.verdict] || VERDICT_CONFIG.unverified;
-          const citations = claim.citations || [];
-          const isExpanded = expandedClaims.has(idx);
-
-          return (
-            <div key={idx} className="claim-card animate-fade-in" style={{ animationDelay: `${idx * 60}ms` }}>
-              <div className="claim-header">
-                <div className="claim-text">{claim.claim}</div>
-                <span className={`badge ${vcfg.className}`}>
-                  <span className="verdict-icon">{vcfg.icon}</span>
-                  {vcfg.label}
-                </span>
+          {/* Themes */}
+          {themes.length > 0 && (
+            <div className="report-section">
+              <div className="report-section-title">Themes</div>
+              <div className="themes-list">
+                {themes.map((t, i) => (
+                  <div key={i} className="theme-chip">
+                    <span>🏷️</span>
+                    <span>{t.theme}</span>
+                  </div>
+                ))}
               </div>
+            </div>
+          )}
 
-              {/* Confidence bar */}
-              <div className="claim-details">
-                <span>
-                  Confidence: {Math.round((claim.confidence || 0) * 100)}%
-                </span>
-                <span>
-                  Source: {claim.source_type || 'unknown'}
-                </span>
+          {/* Verified Claims */}
+          <div className="report-section">
+            <div className="report-section-title">
+              Verified Claims ({verifiedClaims.length})
+            </div>
+
+            {verifiedClaims.length === 0 && (
+              <div className="glass-panel" style={{ textAlign: 'center', padding: 24 }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  No claims were extracted for this report.
+                </p>
               </div>
+            )}
 
-              <div style={{ marginTop: 8 }}>
-                <div className="confidence-bar">
-                  <div
-                    className="confidence-bar-fill"
-                    style={{
-                      width: `${(claim.confidence || 0) * 100}%`,
-                      background: vcfg.barColor,
-                    }}
-                  />
-                </div>
-              </div>
+            {verifiedClaims.map((claim, idx) => {
+              const vcfg = VERDICT_CONFIG[claim.verdict] || VERDICT_CONFIG.unverified;
+              const citations = claim.citations || [];
+              const isExpanded = expandedClaims.has(idx);
 
-              {/* Justification */}
-              {claim.justification && (
-                <div className="claim-justification">
-                  {claim.justification}
-                </div>
-              )}
+              return (
+                <div key={idx} className="claim-card animate-fade-in" style={{ animationDelay: `${idx * 60}ms` }}>
+                  <div className="claim-header">
+                    <div className="claim-text">{claim.claim}</div>
+                    <span className={`badge ${vcfg.className}`}>
+                      <span className="verdict-icon">{vcfg.icon}</span>
+                      {vcfg.label}
+                    </span>
+                  </div>
 
-              {/* Citations toggle */}
-              {citations.length > 0 && (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => toggleClaimCitations(idx)}
-                    style={{ marginTop: 10, fontSize: '0.75rem' }}
-                  >
-                    {isExpanded ? '▾ Hide' : '▸ Show'} {citations.length} source{citations.length !== 1 ? 's' : ''}
-                  </button>
+                  {/* Confidence bar */}
+                  <div className="claim-details">
+                    <span>
+                      Confidence: {Math.round((claim.confidence || 0) * 100)}%
+                    </span>
+                    <span>
+                      Source: {claim.source_type || 'unknown'}
+                    </span>
+                  </div>
 
-                  {isExpanded && (
-                    <div className="citation-list animate-fade-in">
-                      {citations.map((c, ci) => (
-                        <div key={ci} className="citation-item">
-                          <a
-                            className="citation-title"
-                            href={c.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {c.title || c.url || 'Source'}
-                          </a>
-                          {c.snippet && (
-                            <div className="citation-snippet">
-                              &ldquo;{c.snippet}&rdquo;
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  <div style={{ marginTop: 8 }}>
+                    <div className="confidence-bar">
+                      <div
+                        className="confidence-bar-fill"
+                        style={{
+                          width: `${(claim.confidence || 0) * 100}%`,
+                          background: vcfg.barColor,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Justification */}
+                  {claim.justification && (
+                    <div className="claim-justification">
+                      {claim.justification}
                     </div>
                   )}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Raw Data */}
-      {rawData.length > 0 && (
-        <div className="report-section">
-          <div className="report-section-title">Raw Data</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {rawData.map((data, idx) => (
-              <div key={idx} className="glass-panel" style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <strong>Source: <span style={{textTransform: 'capitalize'}}>{data.source}</span></strong>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{formatDate(data.published_at || data.created_at)}</span>
+                  {/* Citations toggle */}
+                  {citations.length > 0 && (
+                    <>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => toggleClaimCitations(idx)}
+                        style={{ marginTop: 10, fontSize: '0.75rem' }}
+                      >
+                        {isExpanded ? '▾ Hide' : '▸ Show'} {citations.length} source{citations.length !== 1 ? 's' : ''}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="citation-list animate-fade-in">
+                          {citations.map((c, ci) => (
+                            <div key={ci} className="citation-item">
+                              <a
+                                className="citation-title"
+                                href={c.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {c.title || c.url || 'Source'}
+                              </a>
+                              {c.snippet && (
+                                <div className="citation-snippet">
+                                  &ldquo;{c.snippet}&rdquo;
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-                {data.author && <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Author: {data.author}</div>}
-                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem' }}>
-                  {data.text}
-                </div>
-                {data.url && (
-                  <div style={{ marginTop: '12px' }}>
-                    <a href={data.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', fontSize: '0.85rem' }}>
-                      View Original
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </div>
-      )}
 
-      {/* RAG Chatbot */}
-      <Chatbot jobId={report.query_id} />
+          {/* RAG Chatbot */}
+          <Chatbot jobId={report.query_id} />
+        </>
+      )}
     </div>
   );
 }
