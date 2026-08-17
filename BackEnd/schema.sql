@@ -45,10 +45,12 @@ CREATE TABLE IF NOT EXISTS source_documents (
     query_id UUID REFERENCES queries(id) ON DELETE CASCADE,
     source VARCHAR(50) NOT NULL,          -- reddit | youtube | wikipedia | news | amazon | flipkart
     author VARCHAR(255),
+    title VARCHAR(255),
     text TEXT NOT NULL,
     url TEXT,
     published_at TIMESTAMPTZ,
     engagement_metrics JSONB,             -- upvotes, likes, view count, etc.
+    metadata JSONB,                       -- extra source-specific data (thumbnails, descriptions, etc.)
     created_at TIMESTAMPTZ DEFAULT now()
 );
 

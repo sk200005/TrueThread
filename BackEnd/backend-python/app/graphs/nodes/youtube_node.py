@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Constants for how many videos to process
 TARGET_COUNT = 5
+SEARCH_CANDIDATE_COUNT = 50
 
 async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
     """
@@ -33,10 +34,11 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
 
     logger.info("YouTube fetch starting for query: %r", query)
     documents: list[SourceDoc] = []
+    skipped: list[dict[str, Any]] = []
 
     try:
         # 1. Search videos
-        video_ids = await youtube_client.search_videos(query, max_results=20)
+        video_ids = await youtube_client.search_videos(query, max_results=SEARCH_CANDIDATE_COUNT)
         
         # 2. Get ranked metadata
         ranked_videos = await youtube_client.get_video_metadata(video_ids, target_count=TARGET_COUNT)
@@ -52,21 +54,23 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
             
             # Since get_transcript is synchronous, we run it in the default executor
             loop = asyncio.get_running_loop()
-            transcript_obj = await loop.run_in_executor(None, youtube_client.get_transcript, video_id)
+            transcript_obj, skip_reason = await loop.run_in_executor(
+                None,
+                youtube_client.get_transcript_with_reason,
+                video_id,
+            )
             
             if not transcript_obj:
-                logger.info("Skipping %s - no transcript available.", video_id)
+                reason = skip_reason or "no transcript available"
+                logger.info("Skipping %s - %s.", video_id, reason)
+                skipped.append({
+                    "videoId": video_id,
+                    "title": video["title"],
+                    "url": video["url"],
+                    "reason": reason,
+                })
                 continue
                 
-            # Format text
-            text_parts = [
-                f"Title: {video['title']}",
-                f"Description: {video['description']}",
-                f"Transcript:\n{transcript_obj['text']}",
-            ]
-                
-            full_text = "\n\n".join(text_parts)
-            
             # Parse publishedAt to ISO format or None if missing
             pub_date = None
             if video["publishedAt"]:
@@ -81,7 +85,8 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
             doc: SourceDoc = {
                 "source": "youtube",
                 "author": video["channel"],
-                "text": full_text,
+                "title": video["title"],
+                "text": transcript_obj['text'],
                 "url": video["url"],
                 "published_at": pub_date,
                 "engagement_metrics": {
@@ -89,14 +94,33 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
                     "likes": video["likes"],
                     "duration": video["duration"]
                 },
+                "metadata": {
+                    "description": video["description"],
+                    "thumbnail_url": video.get("thumbnail_url", ""),
+                }
             }
             documents.append(doc)
             collected += 1
 
         if not documents:
-            logger.warning("No YouTube transcripts were successfully collected.")
+            msg = f"No YouTube transcripts were successfully collected from {len(ranked_videos)} candidates."
+            logger.warning(msg)
+            return {
+                "sources": {
+                    "youtube": {
+                        "status": "failed",
+                        "documents": [],
+                        "error": msg,
+                        "skipped": skipped,
+                    }
+                }
+            }
         else:
-            logger.info("Successfully fetched %d YouTube transcripts.", len(documents))
+            logger.info(
+                "Successfully fetched %d YouTube transcripts; skipped %d candidates.",
+                len(documents),
+                len(skipped),
+            )
 
     except Exception as exc:
         logger.exception("YouTube fetch failed entirely: %s", exc)
@@ -105,7 +129,8 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
                 "youtube": {
                     "status": "failed",
                     "documents": [],
-                    "error": str(exc)
+                    "error": str(exc),
+                    "skipped": skipped,
                 }
             }
         }
@@ -115,7 +140,8 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
             "youtube": {
                 "status": "done",
                 "documents": documents,
-                "error": None
+                "error": None,
+                "skipped": skipped,
             }
         }
     }

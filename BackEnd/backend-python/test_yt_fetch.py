@@ -28,10 +28,18 @@ async def main():
     if error:
         print(f"Error: {error}")
     
+    import json
+    
+    output_file = "youtube_test_output.json"
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(docs, f, ensure_ascii=False, indent=4)
+        
     for doc in docs:
         print(f"\n--- {doc.get('url')} ---")
         text = doc.get("text", "")
         print(f"Content snippet: {text[:200]}...\n")
+        
+    print(f"\n✅ Full transcripts have been saved to: {output_file}")
 
 if __name__ == "__main__":
     asyncio.run(main())

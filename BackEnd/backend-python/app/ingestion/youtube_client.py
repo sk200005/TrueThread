@@ -4,9 +4,25 @@ youtube_client.py — Fetches data from YouTube using Data API v3 and youtube-tr
 
 import logging
 import re
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict, Optional, Tuple
 import httpx
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api import (
+    AgeRestricted,
+    CookieError,
+    CookieInvalid,
+    InvalidVideoId,
+    IpBlocked,
+    NoTranscriptFound,
+    NotTranslatable,
+    PoTokenRequired,
+    RequestBlocked,
+    TranscriptsDisabled,
+    TranslationLanguageNotAvailable,
+    VideoUnavailable,
+    VideoUnplayable,
+    YouTubeRequestFailed,
+    YouTubeTranscriptApi,
+)
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -89,13 +105,17 @@ async def get_video_metadata(video_ids: List[str], target_count: int = 5) -> Lis
             "duration": parse_duration(details.get("duration", "PT0S")),
             "url": f"https://www.youtube.com/watch?v={item['id']}",
             "description": snippet.get("description", ""),
+            "thumbnail_url": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
         })
 
     # Sort by original search relevance order
     videos.sort(key=lambda x: video_ids.index(x["videoId"]) if x["videoId"] in video_ids else 999)
-    top_videos = videos[:target_count * 2] # buffer
-    logger.info("Selected top %d candidates after ranking.", min(len(top_videos), target_count))
-    return top_videos
+    logger.info(
+        "Prepared %d ranked candidates for transcript collection (target=%d).",
+        len(videos),
+        target_count,
+    )
+    return videos
 
 
 async def get_top_comments(video_id: str, max_results: int = 3) -> List[Dict[str, Any]]:
@@ -130,7 +150,34 @@ async def get_top_comments(video_id: str, max_results: int = 3) -> List[Dict[str
     return comments
 
 
-def get_transcript(video_id: str) -> Optional[Dict[str, Any]]:
+def _format_transcript_error(exc: Exception) -> str:
+    """Return a short, user-useful reason for a transcript fetch failure."""
+    if isinstance(exc, TranscriptsDisabled):
+        return "transcripts disabled by video owner"
+    if isinstance(exc, NoTranscriptFound):
+        return "no caption track available"
+    if isinstance(exc, VideoUnavailable):
+        return "video unavailable"
+    if isinstance(exc, VideoUnplayable):
+        return "video unplayable"
+    if isinstance(exc, AgeRestricted):
+        return "age restricted"
+    if isinstance(exc, InvalidVideoId):
+        return "invalid video id"
+    if isinstance(exc, (RequestBlocked, IpBlocked, PoTokenRequired)):
+        return "YouTube blocked transcript request"
+    if isinstance(exc, (CookieError, CookieInvalid)):
+        return "invalid YouTube cookies"
+    if isinstance(exc, (NotTranslatable, TranslationLanguageNotAvailable)):
+        return "transcript is not translatable to English"
+    if isinstance(exc, YouTubeRequestFailed):
+        return "YouTube transcript request failed"
+
+    msg = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
+    return msg[:300]
+
+
+def get_transcript_with_reason(video_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Fetch transcript for a video, translating to English if necessary.
     Uses youtube_transcript_api (which handles translation natively).
@@ -166,16 +213,21 @@ def get_transcript(video_id: str) -> Optional[Dict[str, Any]]:
         except Exception:
             # If no english transcript, get the first available one and translate it
             transcript = transcript_list.find_transcript([t.language_code for t in transcript_list])
-            if transcript.language_code != 'en':
+            source_lang = transcript.language_code
+            if source_lang != 'en':
                 try:
                     transcript = transcript.translate('en')
                     is_translated = True
                 except Exception as e:
                     logger.warning("Translation failed for %s: %s. Storing original.", video_id, e)
+            else:
+                source_lang = transcript.language_code
+        else:
+            source_lang = transcript.language_code
                 
         entries = transcript.fetch()
         if not entries:
-            return None
+            return None, "empty transcript"
             
         text_parts = []
         for e in entries:
@@ -190,8 +242,18 @@ def get_transcript(video_id: str) -> Optional[Dict[str, Any]]:
         return {
             "text": text,
             "lang": 'en' if is_translated else transcript.language_code,
-            "original_lang": transcript.language_code
-        }
+            "original_lang": source_lang
+        }, None
     except Exception as e:
-        logger.warning("No transcript available for %s: %s", video_id, e)
-        return None
+        reason = _format_transcript_error(e)
+        logger.warning("No transcript available for %s: %s", video_id, reason)
+        return None, reason
+
+
+def get_transcript(video_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Backward-compatible wrapper for callers that only need the transcript.
+    Use get_transcript_with_reason when skip diagnostics matter.
+    """
+    transcript, _reason = get_transcript_with_reason(video_id)
+    return transcript

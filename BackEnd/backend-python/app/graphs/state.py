@@ -22,21 +22,24 @@ from typing import Annotated
 # Ingestion Graph State (existing — DO NOT MODIFY)
 # ══════════════════════════════════════════════════════════════════════════
 
-class SourceDoc(TypedDict):
+class SourceDoc(TypedDict, total=False):
     """A single fetched document, before chunking."""
 
     source: str                         # "wikipedia" | "reddit" | "youtube" | ...
     author: Optional[str]
+    title: Optional[str]
     text: str
     url: str
     published_at: Optional[str]
     engagement_metrics: Optional[dict[str, Any]]
+    metadata: Optional[dict[str, Any]]
 
 
 class SourceResult(TypedDict, total=False):
     status: Literal["pending", "in_progress", "done", "failed"]
     documents: list[SourceDoc]
     error: str | None
+    skipped: list[dict[str, Any]]
 
 def merge_sources(a: dict[str, SourceResult], b: dict[str, SourceResult]) -> dict[str, SourceResult]:
     """Deep merge for the sources dict to support concurrent partial writes."""

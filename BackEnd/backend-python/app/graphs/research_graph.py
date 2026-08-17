@@ -127,13 +127,21 @@ async def run_pipeline(job) -> dict:
         # Emit terminal progress event for each source that was fetched in this run
         for source in sources:
             src_res = final_sources.get(source, {})
+            documents = src_res.get("documents", [])
+            skipped = src_res.get("skipped", [])
             evt = {
                 "type": "progress",
                 "source": source,
                 "status": src_res.get("status", "error"),
+                "counts": {
+                    "documents": len(documents),
+                    "skipped": len(skipped),
+                },
             }
             if src_res.get("error"):
                 evt["error"] = src_res["error"]
+            if skipped:
+                evt["skipped"] = skipped[:10]
             await _emit(job, evt)
 
         # Build results dict (what gets returned to BullMQ)
@@ -142,6 +150,8 @@ async def run_pipeline(job) -> dict:
             s_res = final_sources.get(s, {})
             job_results[s] = {
                 "status": s_res.get("status", "pending"),
+                "documents": len(s_res.get("documents", [])),
+                "skipped": len(s_res.get("skipped", [])),
             }
         job_results["total_docs_inserted"] = docs_count
         job_results["total_chunks_inserted"] = chunks_count

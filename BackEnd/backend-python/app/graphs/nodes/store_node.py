@@ -98,21 +98,26 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
                         import json
                         eng_metrics = doc.get("engagement_metrics")
                         eng_metrics_json = json.dumps(eng_metrics) if eng_metrics else None
+                        
+                        metadata = doc.get("metadata")
+                        metadata_json = json.dumps(metadata) if metadata else None
 
                         await session.execute(
                             text("""
-                                INSERT INTO source_documents (id, query_id, source, author, text, url, published_at, engagement_metrics, created_at)
-                                VALUES (:id, :query_id, :source, :author, :text, :url, :published_at, :engagement_metrics, now())
+                                INSERT INTO source_documents (id, query_id, source, author, title, text, url, published_at, engagement_metrics, metadata, created_at)
+                                VALUES (:id, :query_id, :source, :author, :title, :text, :url, :published_at, :engagement_metrics, :metadata, now())
                             """),
                             {
                                 "id": str(doc_id),
                                 "query_id": job_id,
                                 "source": doc["source"],
                                 "author": doc.get("author"),
+                                "title": doc.get("title"),
                                 "text": doc["text"],
                                 "url": doc.get("url"),
                                 "published_at": doc.get("published_at"),
                                 "engagement_metrics": eng_metrics_json,
+                                "metadata": metadata_json,
                             },
                         )
                         docs_inserted += 1
