@@ -1,4 +1,4 @@
-="""
+"""
 graphs/nodes/wikipedia_node.py — Fetch Wikipedia content for a research query.
 
 Uses the `wikipedia-api` package (MediaWiki REST API wrapper) to:
@@ -104,22 +104,44 @@ async def filter_relevant_titles(
         return fallback
 
 
+import re
+
+def extract_keywords(query: str) -> str:
+    """Strips conversational words so Wikipedia's strict search engine can find results."""
+    stopwords = {
+        "what", "when", "where", "why", "who", "how", "is", "are", "was", "were", 
+        "do", "does", "did", "happen", "happened", "in", "on", "at", "to", "the", 
+        "a", "an", "of", "for", "about", "tell", "me", "explain", "details", "give"
+    }
+    words = query.split()
+    keywords = []
+    for w in words:
+        w_clean = re.sub(r'[^\w\s]', '', w)
+        if w_clean.lower() not in stopwords and len(w_clean) > 0:
+            keywords.append(w_clean)
+    return " ".join(keywords)
+
 def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
     """
     Search Wikipedia for article titles matching the query.
 
-    Uses the MediaWiki opensearch API via a lightweight requests call,
-    since wikipedia-api doesn't expose search directly.
+    Extracts keywords from conversational queries and uses the robust 
+    full-text 'srsearch' API for better matching.
     """
     import requests
 
+    search_query = extract_keywords(query)
+    # If stripping leaves it empty, fallback to original query
+    if not search_query.strip():
+        search_query = query
+        
     url = "https://en.wikipedia.org/w/api.php"
     params = {
-        "action": "opensearch",
-        "search": query,
-        "limit": limit,
-        "namespace": 0,
+        "action": "query",
+        "list": "search",
+        "srsearch": search_query,
         "format": "json",
+        "srlimit": limit,
     }
     try:
         headers = {
@@ -128,8 +150,9 @@ def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        # opensearch returns [query, [titles], [descriptions], [urls]]
-        return data[1] if len(data) > 1 else []
+        
+        results = data.get("query", {}).get("search", [])
+        return [item["title"] for item in results]
     except Exception as exc:
         logger.warning("Wikipedia search failed: %s", exc)
         return []

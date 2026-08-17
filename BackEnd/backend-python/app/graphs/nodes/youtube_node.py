@@ -58,18 +58,12 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
                 logger.info("Skipping %s - no transcript available.", video_id)
                 continue
                 
-            # Get top comments
-            comments = await youtube_client.get_top_comments(video_id, max_results=3)
-            
             # Format text
             text_parts = [
                 f"Title: {video['title']}",
                 f"Description: {video['description']}",
                 f"Transcript:\n{transcript_obj['text']}",
             ]
-            if comments:
-                comments_text = "\n".join([f"- {c['author']}: {c['text']}" for c in comments])
-                text_parts.append(f"Comments:\n{comments_text}")
                 
             full_text = "\n\n".join(text_parts)
             

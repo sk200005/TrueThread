@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # ── Groq LLM Model ───────────────────────────────────────────────────
     # Model used for summarization and claim extraction (via OpenAI-compatible API).
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "llama-3.1-8b-instant"
 
     # ── Redis (BullMQ Job Queue) ─────────────────────────────────────────
     redis_host: str = "localhost"
