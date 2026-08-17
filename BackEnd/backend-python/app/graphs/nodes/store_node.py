@@ -101,6 +101,13 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
                         
                         metadata = doc.get("metadata")
                         metadata_json = json.dumps(metadata) if metadata else None
+                        
+                        pub_at = doc.get("published_at")
+                        if isinstance(pub_at, str):
+                            try:
+                                pub_at = datetime.fromisoformat(pub_at.replace('Z', '+00:00'))
+                            except ValueError:
+                                pub_at = None
 
                         await session.execute(
                             text("""
@@ -115,7 +122,7 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
                                 "title": doc.get("title"),
                                 "text": doc["text"],
                                 "url": doc.get("url"),
-                                "published_at": doc.get("published_at"),
+                                "published_at": pub_at,
                                 "engagement_metrics": eng_metrics_json,
                                 "metadata": metadata_json,
                             },

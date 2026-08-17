@@ -177,33 +177,96 @@ def _format_transcript_error(exc: Exception) -> str:
     return msg[:300]
 
 
-def get_transcript_with_reason(video_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """
-    Fetch transcript for a video, translating to English if necessary.
-    Uses youtube_transcript_api (which handles translation natively).
-    """
+def _clean_transcript_text(text: str) -> str:
+    """Clean up common transcript artifacts like [Music] and extra whitespace."""
+    text = re.sub(r'\[Music\]|\[Applause\]|\[.*?\]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def _fetch_transcript_ytdlp(video_id: str) -> Optional[Dict[str, Any]]:
+    """Primary strategy: use yt-dlp to extract subtitles."""
+    import yt_dlp
+    import requests
+    import json
+    
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {
+        'skip_download': True,
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitlesformat': 'json3',
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
     try:
-        import os
-        import http.cookiejar
-        from requests import Session
-        
-        session = Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-        })
-        try:
-            # Resolves to /Users/swayam/Desktop/Test/BackEnd/backend-python/cookies.txt
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__))) 
-            cookies_path = os.path.join(base_dir, "cookies.txt")
-            if os.path.exists(cookies_path):
-                cookie_jar = http.cookiejar.MozillaCookieJar(cookies_path)
-                cookie_jar.load(ignore_discard=True, ignore_expires=True)
-                session.cookies.update(cookie_jar)
-        except Exception as e:
-            logger.warning("Failed to load cookies.txt: %s", e)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
             
-        ytt_api = YouTubeTranscriptApi(http_client=session)
+            all_subs = {}
+            if info.get('automatic_captions'):
+                all_subs.update(info['automatic_captions'])
+            if info.get('subtitles'):
+                all_subs.update(info['subtitles'])
+                
+            if not all_subs:
+                return None
+                
+            # Prefer English
+            lang = 'en'
+            if lang not in all_subs:
+                lang = list(all_subs.keys())[0]
+                
+            formats = all_subs[lang]
+            
+            # Prefer json3 for easy parsing
+            sub_format = next((f for f in formats if f.get('ext') == 'json3'), formats[0])
+            sub_url = sub_format.get('url')
+            
+            if not sub_url:
+                return None
+                
+            resp = requests.get(sub_url)
+            resp.raise_for_status()
+            
+            text = ""
+            if sub_format.get('ext') == 'json3' or 'json3' in sub_url:
+                try:
+                    data = resp.json()
+                    events = data.get('events', [])
+                    text_parts = []
+                    for event in events:
+                        segs = event.get('segs', [])
+                        for seg in segs:
+                            text_parts.append(seg.get('utf8', ''))
+                    text = "".join(text_parts).replace('\n', ' ')
+                except json.JSONDecodeError:
+                    text = resp.text
+            else:
+                # Basic fallback cleanup for non-JSON formats like VTT
+                text = re.sub(r'<[^>]+>', '', resp.text)
+                text = re.sub(r'[\d:\.,]+ --> [\d:\.,]+', '', text)
+                text = re.sub(r'WEBVTT|Kind:|Language:|Style:|Align:|Position:', '', text)
+                
+            text = _clean_transcript_text(text)
+            if not text:
+                return None
+                
+            return {
+                "text": text,
+                "lang": lang,
+                "original_lang": lang
+            }
+    except Exception as e:
+        logger.warning("yt-dlp transcript fetch failed for %s: %s", video_id, e)
+        return None
+
+
+def _fetch_transcript_api(video_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Fallback strategy: use youtube-transcript-api."""
+    try:
+        ytt_api = YouTubeTranscriptApi()
         transcript_list = ytt_api.list(video_id)
         
         is_translated = False
@@ -235,9 +298,7 @@ def get_transcript_with_reason(video_id: str) -> Tuple[Optional[Dict[str, Any]],
             text_parts.append(part)
         text = " ".join(text_parts)
         
-        # Clean up some common transcript artifacts
-        text = re.sub(r'\[Music\]|\[Applause\]|\[.*?\]', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = _clean_transcript_text(text)
         
         return {
             "text": text,
@@ -246,8 +307,23 @@ def get_transcript_with_reason(video_id: str) -> Tuple[Optional[Dict[str, Any]],
         }, None
     except Exception as e:
         reason = _format_transcript_error(e)
-        logger.warning("No transcript available for %s: %s", video_id, reason)
+        logger.warning("youtube-transcript-api fetch failed for %s: %s", video_id, reason)
         return None, reason
+
+
+def get_transcript_with_reason(video_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Fetch transcript for a video using a multi-strategy approach.
+    1. Try yt-dlp first (most resilient).
+    2. Fall back to youtube-transcript-api.
+    """
+    logger.info("Fetching transcript for %s using yt-dlp...", video_id)
+    transcript = _fetch_transcript_ytdlp(video_id)
+    if transcript:
+        return transcript, None
+        
+    logger.info("yt-dlp failed or returned empty for %s. Falling back to youtube-transcript-api...", video_id)
+    return _fetch_transcript_api(video_id)
 
 
 def get_transcript(video_id: str) -> Optional[Dict[str, Any]]:

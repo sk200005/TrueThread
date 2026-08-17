@@ -15,7 +15,7 @@ from app.ingestion import youtube_client
 logger = logging.getLogger(__name__)
 
 # Constants for how many videos to process
-TARGET_COUNT = 5
+TARGET_COUNT = 3
 SEARCH_CANDIDATE_COUNT = 50
 
 async def youtube_fetch(state: ResearchState) -> dict[str, Any]:

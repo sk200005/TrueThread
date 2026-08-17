@@ -9,7 +9,7 @@ const { translateTranscript } = require('./src/translator');
 const { getTopComments } = require('./src/comments');
 const { saveJson } = require('./src/output');
 
-const TARGET_COUNT = 5;
+const TARGET_COUNT = 3;
 
 // ─── Terminal Prompt ─────────────────────────────────────────────────────────
 
