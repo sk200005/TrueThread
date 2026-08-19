@@ -33,7 +33,7 @@ import { updateJob } from '../api/jobHistory.js';
 // ── Source lanes (research pipeline) ─────────────────────────────────
 const SOURCE_LANES = [
   { id: 'reddit', label: 'Reddit', icon: '💬', isMock: true },
-  { id: 'youtube', label: 'YouTube', icon: '📺', isMock: true },
+  { id: 'youtube', label: 'YouTube', icon: '📺', isMock: false },
   { id: 'wikipedia', label: 'Wikipedia', icon: '📚', isMock: false },
 ];
 
