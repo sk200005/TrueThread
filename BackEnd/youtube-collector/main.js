@@ -65,14 +65,14 @@ async function main() {
       if (collected.length >= TARGET_COUNT) break;
 
       console.log(`▶  [${collected.length + 1}/${TARGET_COUNT}] "${video.title}"`);
-      console.log(`   Channel: ${video.channel} | Views: ${video.views.toLocaleString()} | Likes: ${video.likes.toLocaleString()}`);
+      console.log(`   Channel: ${video.channel} | Duration: ${video.duration} | Views: ${video.views.toLocaleString()} | Likes: ${video.likes.toLocaleString()}`);
 
       try {
         // 4. Fetch transcript (mandatory — skip if unavailable)
         const rawTranscript = await getTranscript(video.videoId);
         if (!rawTranscript) {
-          console.log(`   ⏭  Skipped — no transcript available.\n`);
-          skipped.push({ title: video.title, reason: 'No transcript available' });
+          console.log(`   ⏭  Skipped — no English transcript available.\n`);
+          skipped.push({ title: video.title, reason: 'No English transcript available' });
           continue;
         }
 

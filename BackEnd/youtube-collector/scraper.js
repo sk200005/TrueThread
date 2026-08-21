@@ -102,7 +102,7 @@ async function scrape(jobId, query, queryId = null) {
         );
 
         if (!rawTranscript) {
-          logger.warn({ jobId, source, message: 'No transcript available, skipping video', videoId: video.videoId });
+          logger.warn({ jobId, source, message: 'No English transcript available, skipping video', videoId: video.videoId });
           skipped++;
           continue;
         }

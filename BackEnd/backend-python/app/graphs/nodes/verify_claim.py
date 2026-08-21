@@ -299,6 +299,9 @@ async def verify_claim(state: QueryState) -> dict[str, Any]:
         except Exception as exc:
             logger.error("Verification LLM call failed for claim %r: %s", claim_text[:40], exc)
             result = None
+            
+        import asyncio
+        await asyncio.sleep(4)
 
         if result:
             # Enforce: "disputed" only valid for source_type="both"

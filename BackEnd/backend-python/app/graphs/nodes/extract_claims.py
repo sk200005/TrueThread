@@ -396,6 +396,9 @@ async def extract_claims(state: QueryState) -> dict[str, Any]:
                 if skipped:
                     total_skipped_dup += len(comment_claims)
 
+            import asyncio
+            await asyncio.sleep(4)
+
             # Add to state output
             for claim in claims:
                 claim_dict: ExtractedClaimDict = {

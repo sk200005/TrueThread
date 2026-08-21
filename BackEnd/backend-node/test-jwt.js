@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const http = require('http');
 
-const token = jwt.sign({ userId: '6cf58554-2459-42d1-b791-2c9c91ce504c' }, 'research_jwt_secret_change_in_production', { expiresIn: '1d' });
+const token = jwt.sign({ userId: '6cf58554-2459-42d1-b791-2c9c91ce504c' }, 
+                      'research_jwt_secret_change_in_production', 
+                      { expiresIn: '1d' });
+
+                      // jwt.sign(payload, secret, options)
 
 http.get('http://localhost:3000/api/reports', {
   headers: { 'Authorization': 'Bearer ' + token }
@@ -12,3 +16,6 @@ http.get('http://localhost:3000/api/reports', {
     console.log("REPORTS:", data);
   });
 });
+
+// jwt.sign() → creates the token
+// jwt.verify() → checks whether the token is valid

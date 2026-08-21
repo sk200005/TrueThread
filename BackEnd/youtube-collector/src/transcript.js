@@ -5,7 +5,27 @@ const axios = require('axios');
 const execFileAsync = util.promisify(execFile);
 
 /**
- * Fetches transcript using yt-dlp.
+ * Finds the best English subtitle key from a subtitles/captions object.
+ * Matches 'en', 'en-US', 'en-GB', etc. — any key starting with 'en'.
+ *
+ * @param {object} subsObj - yt-dlp subtitles or automatic_captions object
+ * @returns {string|null} The matching language key, or null
+ */
+function findEnglishKey(subsObj) {
+  if (!subsObj || typeof subsObj !== 'object') return null;
+  // Prefer exact 'en' first, then any 'en-*' variant
+  if (subsObj['en']) return 'en';
+  const variant = Object.keys(subsObj).find((k) => k.startsWith('en'));
+  return variant || null;
+}
+
+/**
+ * Fetches English transcript using yt-dlp.
+ *
+ * Subtitle priority:
+ *   1. Manually created English subtitles (info.subtitles)
+ *   2. Auto-generated English subtitles (info.automatic_captions)
+ *   3. No English available → return null
  */
 async function _fetchTranscriptYtdlp(videoId) {
   try {
@@ -22,20 +42,35 @@ async function _fetchTranscriptYtdlp(videoId) {
     const { stdout } = await execFileAsync('yt-dlp', args, { maxBuffer: 1024 * 1024 * 10 });
     const info = JSON.parse(stdout);
 
-    const allSubs = {};
-    if (info.automatic_captions) Object.assign(allSubs, info.automatic_captions);
-    if (info.subtitles) Object.assign(allSubs, info.subtitles);
+    // ── Find English subtitles with priority: manual > auto-generated ────
+    let lang = null;
+    let subsSource = null;
 
-    if (Object.keys(allSubs).length === 0) {
+    // 1. Prefer manually created English subtitles
+    const manualEnKey = findEnglishKey(info.subtitles);
+    if (manualEnKey) {
+      lang = manualEnKey;
+      subsSource = info.subtitles;
+      console.log(`   📝 Using manually created English subtitles (${lang})`);
+    }
+
+    // 2. Fall back to auto-generated English subtitles
+    if (!lang) {
+      const autoEnKey = findEnglishKey(info.automatic_captions);
+      if (autoEnKey) {
+        lang = autoEnKey;
+        subsSource = info.automatic_captions;
+        console.log(`   🤖 Using auto-generated English subtitles (${lang})`);
+      }
+    }
+
+    // 3. No English subtitles available at all
+    if (!lang || !subsSource) {
+      console.log(`   ⏭  No English subtitles available for ${videoId}`);
       return null;
     }
 
-    let lang = 'en';
-    if (!allSubs[lang]) {
-      lang = Object.keys(allSubs)[0];
-    }
-
-    const formats = allSubs[lang];
+    const formats = subsSource[lang];
     let subFormat = formats.find(f => f.ext === 'json3') || formats[0];
     const subUrl = subFormat.url;
 
@@ -67,7 +102,7 @@ async function _fetchTranscriptYtdlp(videoId) {
 
     if (!text) return null;
 
-    return { text, lang };
+    return { text, lang: 'en' };
   } catch (err) {
     const errorMsg = err.message ? err.message.split('\n')[0] : String(err);
     console.warn(`   ⚠️  yt-dlp fetch failed for ${videoId}: ${errorMsg}`);
@@ -76,18 +111,18 @@ async function _fetchTranscriptYtdlp(videoId) {
 }
 
 /**
- * Fetches and concatenates the full transcript for a YouTube video using youtube-transcript.
+ * Fetches English transcript using the youtube-transcript npm package.
+ * Explicitly requests English language only.
  */
 async function _fetchTranscriptApi(videoId) {
   try {
-    const entries = await YoutubeTranscript.fetchTranscript(videoId);
+    const entries = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' });
     if (!entries || entries.length === 0) return null;
 
     let text = entries.map((e) => e.text).join(' ');
     text = text.replace(/\[Music\]|\[Applause\]|\[.*?\]/gi, '').replace(/\s+/g, ' ').trim();
     
-    const lang = entries[0]?.lang || 'en';
-    return { text, lang };
+    return { text, lang: 'en' };
   } catch (err) {
     console.warn(`   ⚠️  youtube-transcript fetch failed for ${videoId}: ${err.message}`);
     return null;
@@ -95,8 +130,13 @@ async function _fetchTranscriptApi(videoId) {
 }
 
 /**
- * Fetches and concatenates the full transcript for a YouTube video.
- * Returns null if no transcript is available (caller should skip the video).
+ * Fetches the English transcript for a YouTube video.
+ * Returns null if no English transcript is available (caller should skip the video).
+ *
+ * Priority:
+ *   1. yt-dlp: manual English subs > auto-generated English subs
+ *   2. youtube-transcript API: English only
+ *   3. null (no English transcript available)
  *
  * @param {string} videoId - YouTube video ID
  * @returns {Promise<{ text: string, lang: string } | null>}
@@ -111,3 +151,4 @@ async function getTranscript(videoId) {
 }
 
 module.exports = { getTranscript };
+

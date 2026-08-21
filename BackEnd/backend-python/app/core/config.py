@@ -34,9 +34,11 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
 
-    # ── Groq LLM Model ───────────────────────────────────────────────────
+    # ── Groq LLM Model ───────────────────────────────────────────────
     # Model used for summarization and claim extraction (via OpenAI-compatible API).
-    groq_model: str = "llama-3.1-8b-instant"
+    # llama3-8b-8192 was decommissioned by Groq; groq/compound-mini is the active replacement
+    # available on this API key (backed by llama-3.3-70b internally).
+    groq_model: str = "groq/compound-mini"
 
     # ── Redis (BullMQ Job Queue) ─────────────────────────────────────────
     redis_host: str = "localhost"

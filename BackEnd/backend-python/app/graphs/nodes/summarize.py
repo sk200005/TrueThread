@@ -250,6 +250,8 @@ async def summarize(state: QueryState) -> dict[str, Any]:
         logger.error("LLM call failed for summarization: %s", exc)
         fallback = _make_fallback_report(query)
         fallback["verified_claims"] = []
+        if query_id:
+            await _save_report_to_db(query_id, fallback)
         return {"final_report": fallback, "status": "error"}
 
     # ── Parse response ───────────────────────────────────────────────────

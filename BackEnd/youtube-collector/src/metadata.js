@@ -2,13 +2,12 @@ const axios = require('axios');
 
 const YOUTUBE_VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos';
 const TARGET_VIDEO_COUNT = 5;
-
-// Scoring weights removed to preserve original search ranking
+const MAX_DURATION_SECONDS = 1200; // 20 minutes — videos longer than this are skipped
 
 /**
  * Fetches full metadata for a batch of video IDs in a single API call,
- * computes a ranking score for each, and returns the top TARGET_VIDEO_COUNT
- * sorted by that score.
+ * filters out videos exceeding MAX_DURATION_SECONDS, applies verified-channel
+ * preference when available, and returns the top candidates sorted by relevance.
  *
  * @param {string[]} videoIds - Array of YouTube video IDs
  * @param {string} apiKey - YouTube Data API v3 key
@@ -27,24 +26,33 @@ async function getVideoMetadata(videoIds, apiKey) {
 
   const items = response.data.items || [];
 
-  // Build metadata objects and compute raw scores
-  const videos = items.map((item, index) => {
+  // Build metadata objects
+  const videos = items.map((item) => {
     const snippet = item.snippet || {};
     const stats = item.statistics || {};
     const details = item.contentDetails || {};
 
     const views = parseInt(stats.viewCount || 0, 10);
     const likes = parseInt(stats.likeCount || 0, 10);
-
+    const isoDuration = details.duration || 'PT0S';
 
     return {
       videoId: item.id,
       title: snippet.title || '',
       channel: snippet.channelTitle || '',
+      channelId: snippet.channelId || '',
+      // NOTE: YouTube Data API v3 does NOT expose channel verification status.
+      // The verification badge is rendered client-side by YouTube's frontend and
+      // is not available via any public API endpoint. This field exists as a hook
+      // for future use (e.g., if YouTube adds the field or a supplementary data
+      // source is integrated). Do NOT fabricate verification from subscriber
+      // count, popularity, or channel-name heuristics.
+      isChannelVerified: null,
       publishedAt: snippet.publishedAt || '',
       views: views,
       likes: likes,
-      duration: parseDuration(details.duration || 'PT0S'),
+      duration: parseDuration(isoDuration),
+      durationSeconds: parseDurationSeconds(isoDuration),
       url: `https://www.youtube.com/watch?v=${item.id}`,
       thumbnail:
         snippet.thumbnails?.maxres?.url ||
@@ -55,15 +63,46 @@ async function getVideoMetadata(videoIds, apiKey) {
     };
   });
 
-  // Sort by original search relevance order
-  videos.sort((a, b) => videoIds.indexOf(a.videoId) - videoIds.indexOf(b.videoId));
-  const top = videos.slice(0, TARGET_VIDEO_COUNT * 2); // Extra buffer — transcripts will filter further
+  // ── Duration filter: skip videos longer than 15 minutes ────────────────
+  const beforeCount = videos.length;
+  const filtered = videos.filter((v) => v.durationSeconds <= MAX_DURATION_SECONDS);
+  const droppedCount = beforeCount - filtered.length;
+  if (droppedCount > 0) {
+    console.log(`   ⏱  Filtered out ${droppedCount} video(s) exceeding ${MAX_DURATION_SECONDS}s (15 min).`);
+  }
+
+  // ── Sort: original search relevance, with verified-channel tiebreaker ──
+  // Verified channels (isChannelVerified === true) are promoted ahead of
+  // unverified/unknown channels at the same relevance position.
+  // Currently isChannelVerified is always null, so this is a no-op — but the
+  // logic is ready for when verification data becomes available.
+  filtered.sort((a, b) => {
+    const aVerified = a.isChannelVerified === true ? 0 : 1;
+    const bVerified = b.isChannelVerified === true ? 0 : 1;
+    if (aVerified !== bVerified) return aVerified - bVerified;
+    return videoIds.indexOf(a.videoId) - videoIds.indexOf(b.videoId);
+  });
+
+  const top = filtered.slice(0, TARGET_VIDEO_COUNT * 2); // Extra buffer — transcripts will filter further
 
   console.log(`   Top ${Math.min(top.length, TARGET_VIDEO_COUNT)} candidates selected after ranking.`);
   return top;
 }
 
-
+/**
+ * Converts ISO 8601 duration (e.g. PT4M13S) to total seconds.
+ *
+ * @param {string} iso - ISO 8601 duration string (e.g. "PT1H20M5S")
+ * @returns {number} Total duration in seconds
+ */
+function parseDurationSeconds(iso) {
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const h = parseInt(match[1] || 0, 10);
+  const m = parseInt(match[2] || 0, 10);
+  const s = parseInt(match[3] || 0, 10);
+  return (h * 3600) + (m * 60) + s;
+}
 
 /**
  * Converts ISO 8601 duration (e.g. PT4M13S) to a human-readable string (e.g. "4:13").
@@ -78,4 +117,4 @@ function parseDuration(iso) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-module.exports = { getVideoMetadata };
+module.exports = { getVideoMetadata, parseDurationSeconds };

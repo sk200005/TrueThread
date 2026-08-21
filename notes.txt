@@ -15,3 +15,11 @@ Building one vertical slice end-to-end (even with stubbed data) before wiring in
 
 3]  cd /Users/swayam/Desktop/Test/FrontEnd
     npm run dev
+
+
+if problem get's solve also teach me the 
+approach you think while solving the problem
+
+
+source venv/bin/activate
+python test_yt_3.py "operation sindoor"

@@ -4,6 +4,9 @@ youtube_client.py — Fetches data from YouTube using Data API v3 and youtube-tr
 
 import logging
 import re
+import os
+import http.cookiejar
+from requests import Session
 from typing import Any, List, Dict, Optional, Tuple
 import httpx
 from youtube_transcript_api import (
@@ -26,6 +29,12 @@ from youtube_transcript_api import (
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+COOKIES_PATH = os.path.join(_BASE_DIR, "cookies.txt")
+if not os.path.exists(COOKIES_PATH):
+    COOKIES_PATH = "cookies.txt"
+
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -199,6 +208,9 @@ def _fetch_transcript_ytdlp(video_id: str) -> Optional[Dict[str, Any]]:
         'quiet': True,
         'no_warnings': True,
     }
+    if os.path.exists(COOKIES_PATH):
+        ydl_opts['cookiefile'] = COOKIES_PATH
+
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -266,7 +278,15 @@ def _fetch_transcript_ytdlp(video_id: str) -> Optional[Dict[str, Any]]:
 def _fetch_transcript_api(video_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Fallback strategy: use youtube-transcript-api."""
     try:
-        ytt_api = YouTubeTranscriptApi()
+        if os.path.exists(COOKIES_PATH):
+            session = Session()
+            cookie_jar = http.cookiejar.MozillaCookieJar(COOKIES_PATH)
+            cookie_jar.load(ignore_discard=True, ignore_expires=True)
+            session.cookies.update(cookie_jar)
+            ytt_api = YouTubeTranscriptApi(http_client=session)
+        else:
+            ytt_api = YouTubeTranscriptApi()
+            
         transcript_list = ytt_api.list(video_id)
         
         is_translated = False
