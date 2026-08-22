@@ -19,7 +19,6 @@ from typing import Any
 
 import wikipediaapi
 
-from app.core.llm_client import get_llm_client
 from app.graphs.state import ResearchState, SourceDoc
 
 logger = logging.getLogger(__name__)
@@ -31,77 +30,6 @@ _wiki = wikipediaapi.Wikipedia(
     user_agent="SwayamsResearchApp/1.0 (swayam-test-app; swayam@example.com)",
     language="en",
 )
-
-# ── LLM-based title filter ────────────────────────────────────────────────────
-
-_TITLE_FILTER_SYSTEM = (
-    "You are a search result filter. Given a user's research query and a list "
-    "of Wikipedia article titles returned by a search engine, return ONLY the "
-    "titles that are genuinely about the query subject. Exclude results that "
-    "share a similar name but refer to a different person, place, or concept "
-    "(e.g. exclude 'Georges Sorel' when the query is 'George Soros'). "
-    "Respond with ONLY a JSON array of strings — exact title strings, no commentary, "
-    "no markdown fences, no explanation."
-)
-
-
-async def filter_relevant_titles(
-    query: str,
-    titles: list[str],
-    top_n: int = 3,
-) -> list[str]:
-    """
-    Use the Groq LLM to select only the most relevant Wikipedia titles for ``query``.
-
-    Called after the Wikipedia search and BEFORE fetching full article text, so
-    only genuinely relevant articles are fetched, chunked, and embedded.
-
-    Falls back to ``titles[:top_n]`` if the LLM call fails or returns an
-    unparseable / empty response so the pipeline is never broken by this step.
-    """
-    if not titles:
-        return []
-
-    fallback = titles[:top_n]
-
-    user_prompt = (
-        f'Research query: "{query}"\n'
-        f'Wikipedia search results: {json.dumps(titles)}\n'
-        f'Return a JSON array of the titles that are genuinely relevant to the query. '
-        f'Limit to at most {top_n} titles. '
-        f'Respond with ONLY the JSON array — no prose, no markdown.'
-    )
-
-    try:
-        client = get_llm_client()
-        raw = await client.chat(
-            system_prompt=_TITLE_FILTER_SYSTEM,
-            user_prompt=user_prompt,
-            temperature=0.0,
-            max_tokens=256,
-        )
-    except Exception as exc:
-        logger.warning("LLM title filter failed (%s). Using top-%d fallback.", exc, top_n)
-        return fallback
-
-    # Parse defensively — strip markdown fences if the model adds them
-    cleaned = raw.strip()
-    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.strip()
-
-    try:
-        parsed = json.loads(cleaned)
-        if not isinstance(parsed, list) or not parsed:
-            raise ValueError(f"unexpected shape: {type(parsed).__name__}")
-        result = [t for t in parsed if isinstance(t, str)][:top_n]
-        if not result:
-            raise ValueError("no string titles in parsed list")
-        logger.info("LLM title filter kept %d/%d titles: %s", len(result), len(titles), result)
-        return result
-    except Exception as exc:
-        logger.warning("LLM title filter parse failed (%s). Using top-%d fallback.", exc, top_n)
-        return fallback
 
 
 import re
@@ -196,9 +124,9 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
                 }
             }
 
-        # ── LLM title filter: keep only genuinely relevant articles ──────────────
-        filtered_titles = await filter_relevant_titles(query, titles, top_n=3)
-        logger.info("LLM filter: %d titles → %d: %s", len(titles), len(filtered_titles), filtered_titles)
+        # ── Keep top 3 articles ───────────────────────────────
+        filtered_titles = titles[:3]
+        logger.info("Kept top 3 titles: %s", filtered_titles)
 
         def _fetch_page(title: str) -> SourceDoc | None:
             page = _wiki.page(title)

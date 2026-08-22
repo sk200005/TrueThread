@@ -56,6 +56,7 @@ const initialState = {
   stages: {},               // { rag_retrieve: { status, counts }, ... }
   terminal: null,           // { type: 'done' | 'error', results?, error? }
   error: null,
+  logs: [],                 // Added for live logs
 };
 
 function reducer(state, action) {
@@ -65,21 +66,30 @@ function reducer(state, action) {
 
     case 'SSE_EVENT': {
       const evt = action.event;
+      
+      const logEntry = {
+        id: Date.now() + Math.random().toString(36).substr(2, 9),
+        time: new Date().toLocaleTimeString([], { hour12: false }),
+        source: evt.source || 'system',
+        text: `type=${evt.type}` + (evt.status ? ` status=${evt.status}` : '') + (evt.error ? ` error="${evt.error}"` : ''),
+      };
+      
+      let nextState = { ...state, logs: [...state.logs, logEntry] };
 
       // Terminal events
       if (evt.type === 'done') {
-        return { ...state, terminal: { type: 'done', results: evt.results } };
+        return { ...nextState, terminal: { type: 'done', results: evt.results } };
       }
       if (evt.type === 'error') {
-        return { ...state, terminal: { type: 'error', error: evt.error } };
+        return { ...nextState, terminal: { type: 'error', error: evt.error } };
       }
       if (evt.type === 'cancelled') {
-        return { ...state, terminal: { type: 'cancelled' } };
+        return { ...nextState, terminal: { type: 'cancelled' } };
       }
 
       // Connected event
       if (evt.type === 'connected') {
-        return { ...state, connection: 'connected' };
+        return { ...nextState, connection: 'connected' };
       }
 
       // Progress events — route to source lanes or processing stages
@@ -88,13 +98,13 @@ function reducer(state, action) {
 
         if (isSourceLane) {
           return {
-            ...state,
+            ...nextState,
             sources: {
-              ...state.sources,
+              ...nextState.sources,
               [evt.source]: {
                 status: evt.status || 'started',
-                counts: evt.counts || state.sources[evt.source]?.counts,
-                error: evt.error || state.sources[evt.source]?.error,
+                counts: evt.counts || nextState.sources[evt.source]?.counts,
+                error: evt.error || nextState.sources[evt.source]?.error,
               },
             },
           };
@@ -102,19 +112,19 @@ function reducer(state, action) {
 
         // Processing stage
         return {
-          ...state,
+          ...nextState,
           stages: {
-            ...state.stages,
+            ...nextState.stages,
             [evt.source]: {
               status: evt.status || 'started',
-              counts: evt.counts || state.stages[evt.source]?.counts,
-              error: evt.error || state.stages[evt.source]?.error,
+              counts: evt.counts || nextState.stages[evt.source]?.counts,
+              error: evt.error || nextState.stages[evt.source]?.error,
             },
           },
         };
       }
 
-      return state;
+      return nextState;
     }
 
     case 'FATAL_ERROR':
@@ -159,7 +169,14 @@ function getStageClass(status) {
 export default function LiveStatusPanel({ jobId, onDone, onViewReport }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const sseRef = useRef(null);
+  const logsEndRef = useRef(null);
   const [retrying, setRetrying] = useState(false);
+
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [state.logs]);
 
   const startStream = useCallback(() => {
     dispatch({ type: 'RESET' });
@@ -447,6 +464,38 @@ export default function LiveStatusPanel({ jobId, onDone, onViewReport }) {
           </p>
         </div>
       )}
+
+      {/* Live Logs Terminal */}
+      <div className="pipeline-section" style={{ marginTop: 24 }}>
+        <h3>Live Execution Logs</h3>
+        <div
+          style={{
+            backgroundColor: '#111827',
+            color: '#10b981',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.85rem',
+            padding: 16,
+            borderRadius: 8,
+            height: 250,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}
+        >
+          {state.logs.map((log) => (
+            <div key={log.id} style={{ display: 'flex', gap: 12 }}>
+              <span style={{ color: '#6b7280', minWidth: 65, flexShrink: 0 }}>[{log.time}]</span>
+              <span style={{ color: '#3b82f6', minWidth: 130, flexShrink: 0 }}>[{log.source}]</span>
+              <span style={{ wordBreak: 'break-word' }}>{log.text}</span>
+            </div>
+          ))}
+          {state.logs.length === 0 && (
+            <div style={{ color: '#6b7280' }}>Waiting for events...</div>
+          )}
+          <div ref={logsEndRef} />
+        </div>
+      </div>
     </div>
   );
 }

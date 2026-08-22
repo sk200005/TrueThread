@@ -165,6 +165,12 @@ def _parse_classification_response(
     except json.JSONDecodeError as e:
         return [], str(e)
 
+    if isinstance(parsed, dict):
+        for value in parsed.values():
+            if isinstance(value, list):
+                parsed = value
+                break
+
     if not isinstance(parsed, list):
         return [], f"expected array, got {type(parsed).__name__}"
 
@@ -212,6 +218,10 @@ async def classify_claims(state: QueryState) -> dict[str, Any]:
     try:
         raw_response = await _call_llm_for_classification(user_message)
     except Exception as exc:
+        err_str = str(exc).lower()
+        if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str:
+            raise Exception("LLM API rate limit reached. Please wait and try again.") from exc
+            
         logger.error("LLM classification failed after retries: %s", exc)
         # Fallback: route everything to "skip" so pipeline doesn't crash
         classified: list[ClassifiedClaimDict] = []
@@ -267,6 +277,28 @@ async def classify_claims(state: QueryState) -> dict[str, Any]:
             }
 
         classified_claims.append(classified_claim)
+
+    # ── Cap verifiable claims ────────────────────────────────────────────
+    MAX_CLAIMS_TO_VERIFY = 3
+    
+    def sort_key(c: dict[str, Any]) -> int:
+        conf = c.get("confidence", "low").lower()
+        if conf == "high": return 3
+        if conf == "medium": return 2
+        return 1
+
+    verifiable_indices = [
+        i for i, c in enumerate(classified_claims) 
+        if c.get("route") != "skip"
+    ]
+    verifiable_indices.sort(key=lambda i: sort_key(classified_claims[i]), reverse=True)
+    
+    if len(verifiable_indices) > MAX_CLAIMS_TO_VERIFY:
+        logger.info("Capping verifiable claims to %d (was %d)", MAX_CLAIMS_TO_VERIFY, len(verifiable_indices))
+        for idx in verifiable_indices[MAX_CLAIMS_TO_VERIFY:]:
+            classified_claims[idx]["route"] = "skip"
+            classified_claims[idx]["verifiable"] = False
+            logger.info("  Capped claim (set to skip): %s", classified_claims[idx]["claim_text"][:60])
 
     # ── Log summary ──────────────────────────────────────────────────────
     route_counts: dict[str, int] = {}

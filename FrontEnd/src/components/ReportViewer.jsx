@@ -139,6 +139,7 @@ export default function ReportViewer({ reportId, onBack }) {
   // Extract report fields using REAL field names from the backend
   const sentimentLabel = report.sentiment_summary?.overall || 'neutral';
   const sentimentCfg = SENTIMENT_CONFIG[sentimentLabel] || SENTIMENT_CONFIG.neutral;
+  const reportSummary = report.sentiment_summary?.summary || '';
   const themes = report.themes || [];
   const verifiedClaims = report.verified_claims || [];
   const sourcesRequested = report.sources_requested || [];
@@ -262,6 +263,11 @@ export default function ReportViewer({ reportId, onBack }) {
               <span>{sentimentCfg.icon}</span>
               <span>{sentimentLabel}</span>
             </div>
+            {reportSummary && (
+              <p style={{ marginTop: 16, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                {reportSummary}
+              </p>
+            )}
           </div>
 
           {/* Themes */}

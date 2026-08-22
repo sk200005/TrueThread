@@ -205,86 +205,45 @@ async def _fetch_news_articles(
 # Sub-step 3: Lightweight relevance filter
 # ══════════════════════════════════════════════════════════════════════════
 
-RELEVANCE_FILTER_PROMPT = """You are a relevance judge. Given a claim and a list of news article summaries, rate each article's relevance to the SPECIFIC claim (not just the general topic).
-
-Return a JSON array of objects — no prose, no fences:
-[{"article_index": 0, "relevant": true, "score": 0.85}, ...]
-
-Scoring:
-- 0.8-1.0: Article directly addresses the specific assertion in the claim
-- 0.5-0.8: Article is about the same topic but doesn't directly confirm/deny the claim
-- 0.0-0.5: Article is tangentially related or about a different aspect entirely
-
-Mark relevant=false for articles scoring below 0.5.
-"""
-
-
 async def _filter_relevant_articles(
     claim_text: str,
     articles: list[dict[str, Any]],
 ) -> list[NewsArticleDict]:
     """
-    Re-rank and filter articles for relevance to the specific claim.
+    Re-rank and filter articles for relevance to the specific claim using keyword overlap.
     Drops articles that are topically adjacent but not about the claim.
     """
     if not articles:
         return []
 
-    # Build article summaries for the LLM
-    summaries = []
-    for i, article in enumerate(articles):
-        title = article.get("title", "No title")
-        desc = article.get("description", "")
-        summaries.append(f"[{i}] {title}: {desc[:200]}")
+    # Extract words from claim text for simple matching
+    claim_words = set(re.findall(r'\w+', claim_text.lower()))
 
-    user_prompt = (
-        f"Claim: {claim_text}\n\n"
-        f"Articles:\n" + "\n".join(summaries)
-    )
-
-    try:
-        client = get_llm_client()
-        raw_response = await client.chat(
-            system_prompt=RELEVANCE_FILTER_PROMPT,
-            user_prompt=user_prompt,
-            temperature=0.1,
-            max_tokens=512,
-        )
-
-        # Parse
-        cleaned = raw_response.strip()
-        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE)
-        rankings = json.loads(cleaned.strip())
-
-        if not isinstance(rankings, list):
-            rankings = []
-
-    except Exception as e:
-        logger.warning("Relevance filter LLM call failed, keeping all articles: %s", e)
-        # Fallback: keep all articles with default score
-        rankings = [{"article_index": i, "relevant": True, "score": 0.5} for i in range(len(articles))]
-
-    # ── Build filtered output ────────────────────────────────────────────
     filtered: list[NewsArticleDict] = []
-    for ranking in rankings:
-        idx = ranking.get("article_index", -1)
-        is_relevant = ranking.get("relevant", False)
-        score = ranking.get("score", 0.0)
-
-        if not is_relevant or idx < 0 or idx >= len(articles):
-            continue
-
-        article = articles[idx]
-        filtered.append({
-            "title": article.get("title", ""),
-            "url": article.get("url", ""),
-            "source_name": article.get("source", {}).get("name", ""),
-            "snippet": article.get("description", "") or article.get("content", "")[:300],
-            "published_at": article.get("publishedAt", ""),
-            "relevance_score": float(score),
-        })
-
+    
+    for article in articles:
+        title = article.get("title", "") or ""
+        desc = article.get("description", "") or ""
+        
+        # Combine title and description for matching
+        text_to_search = (title + " " + desc).lower()
+        article_words = set(re.findall(r'\w+', text_to_search))
+        
+        # Calculate simple overlap score
+        overlap = len(claim_words.intersection(article_words))
+        score = overlap / len(claim_words) if claim_words else 0.5
+        
+        # Base filter: at least some overlap
+        if score > 0.1 or not claim_words:
+            filtered.append({
+                "title": title,
+                "url": article.get("url", ""),
+                "source_name": article.get("source", {}).get("name", ""),
+                "snippet": desc or article.get("content", "")[:300],
+                "published_at": article.get("publishedAt", ""),
+                "relevance_score": float(score),
+            })
+            
     # Sort by relevance score descending, keep top 5
     filtered.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
     return filtered[:5]

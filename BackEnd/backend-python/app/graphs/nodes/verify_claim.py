@@ -43,7 +43,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from app.core.llm_client import get_llm_client
+from app.core.gemini_client import get_gemini_client
 from app.graphs.state import (
     CitationDict,
     ClaimEvidenceDict,
@@ -148,12 +148,13 @@ CRITICAL RULES:
 )
 async def _call_llm_for_verification(user_message: str) -> str:
     """Call the LLM with the verification prompt. Retries with backoff."""
-    client = get_llm_client()
+    client = get_gemini_client()
     return await client.chat(
         system_prompt=VERIFY_SYSTEM_PROMPT,
         user_prompt=user_message,
         temperature=0.1,
-        max_tokens=1024,
+        max_tokens=4096,
+        json_mode=True,
     )
 
 
@@ -297,11 +298,13 @@ async def verify_claim(state: QueryState) -> dict[str, Any]:
             raw_response = await _call_llm_for_verification(user_prompt)
             result = _parse_verification_response(raw_response)
         except Exception as exc:
+            err_str = str(exc).lower()
+            if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str:
+                raise Exception("LLM API rate limit reached. Please wait and try again.") from exc
+                
             logger.error("Verification LLM call failed for claim %r: %s", claim_text[:40], exc)
             result = None
             
-        import asyncio
-        await asyncio.sleep(4)
 
         if result:
             # Enforce: "disputed" only valid for source_type="both"

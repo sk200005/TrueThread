@@ -19,14 +19,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import uuid
 from typing import Any
 
 from sqlalchemy import text
 
 from app.core.database import async_session
-from app.core.llm_client import get_llm_client
+from app.core.gemini_client import extract_json, get_gemini_client
 from app.graphs.state import QueryState
 
 logger = logging.getLogger(__name__)
@@ -114,14 +113,8 @@ def _parse_report_response(raw_response: str) -> dict[str, Any] | None:
         logger.warning("Empty LLM response for summarization.")
         return None
 
-    # Strip markdown code fences
-    cleaned = raw_response.strip()
-    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.strip()
-
     try:
-        parsed = json.loads(cleaned)
+        parsed = extract_json(raw_response)
     except json.JSONDecodeError as e:
         logger.warning("Failed to parse summarization JSON: %s", e)
         logger.debug("Raw response was: %s", raw_response[:500])
@@ -183,6 +176,7 @@ async def _save_report_to_db(query_id: str, report: dict[str, Any]) -> str | Non
                     "query_id": query_id,
                     "sentiment_summary": json.dumps({
                         "overall": report.get("overall_sentiment", "neutral"),
+                        "summary": report.get("summary", ""),
                     }),
                     "themes": json.dumps(report.get("themes", [])),
                     "verified_claims": json.dumps(report.get("verified_claims", [])),
@@ -239,14 +233,19 @@ async def summarize(state: QueryState) -> dict[str, Any]:
     user_prompt = _build_user_prompt(query, chunks, claims if claims else None)
 
     try:
-        client = get_llm_client()
+        client = get_gemini_client()
         raw_response = await client.chat(
             system_prompt=SUMMARIZE_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             temperature=0.2,      # Slightly higher than extraction for natural summaries
-            max_tokens=2048,      # Reports can be longer than claim extraction
+            max_tokens=8192,
+            json_mode=True,
         )
     except Exception as exc:
+        err_str = str(exc).lower()
+        if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str:
+            raise Exception("LLM API rate limit reached. Please wait and try again.") from exc
+            
         logger.error("LLM call failed for summarization: %s", exc)
         fallback = _make_fallback_report(query)
         fallback["verified_claims"] = []

@@ -6,7 +6,7 @@ from typing import Any
 from app.core.database import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.ingestion.embedder import Embedder, EmbeddingError
-from app.core.llm_client import LLMClient
+from app.core.gemini_client import GeminiClient
 
 import logging
 logger = logging.getLogger(__name__)
@@ -53,8 +53,8 @@ async def chat_with_query(
             f"Context:\\n{context_str}"
         )
         
-        # 4. Call Groq LLM
-        llm = LLMClient()
+        # 4. Call Gemini LLM (heavy reasoning — user-facing quality)
+        llm = GeminiClient()
         response_text = await llm.chat(
             system_prompt=system_prompt,
             user_prompt=request.message

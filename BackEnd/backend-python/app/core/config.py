@@ -35,10 +35,22 @@ class Settings(BaseSettings):
     embedding_dimension: int = 384
 
     # ── Groq LLM Model ───────────────────────────────────────────────
-    # Model used for summarization and claim extraction (via OpenAI-compatible API).
+    # Model used for lightweight classification/routing tasks (via OpenAI-compatible API).
     # llama3-8b-8192 was decommissioned by Groq; groq/compound-mini is the active replacement
     # available on this API key (backed by llama-3.3-70b internally).
     groq_model: str = "groq/compound-mini"
+
+    # ── Gemini LLM (Google AI) ────────────────────────────────────────
+    # Used for heavy reasoning tasks: claim extraction, verification scoring,
+    # summarization, and chat. Free tier: 15 RPM, 1M TPM.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.6-flash"
+
+    # ── OpenRouter API (Fallback for Gemini) ──────────────────────────
+    openrouter_api_key: str = ""
+
+    # ── Mistral API (Fallback for Groq) ───────────────────────────────
+    mistral_api_key: str = ""
 
     # ── Redis (BullMQ Job Queue) ─────────────────────────────────────────
     redis_host: str = "localhost"

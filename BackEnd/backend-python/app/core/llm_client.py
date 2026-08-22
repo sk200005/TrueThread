@@ -73,15 +73,35 @@ class LLMClient:
         Raises:
             Exception: Any API error (rate limit, timeout, etc.) — caller handles retries.
         """
-        completion = await self.client.chat.completions.create(
-            model=model or self.model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
+        try:
+            completion = await self.client.chat.completions.create(
+                model=model or self.model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+        except Exception as exc:
+            err_str = str(exc).lower()
+            if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str:
+                logger.warning("Groq rate limit hit, falling back to Mistral...")
+                try:
+                    from app.core.fallback_client import get_fallback_client
+                    fallback_client = get_fallback_client()
+                    return await fallback_client.fallback_chat(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        json_mode=False,
+                        provider="mistral"
+                    )
+                except Exception as fallback_exc:
+                    logger.error("Fallback to Mistral failed: %s", fallback_exc)
+                    raise exc
+            raise exc
 
         # Extract the text from the first choice
         content = completion.choices[0].message.content or ""

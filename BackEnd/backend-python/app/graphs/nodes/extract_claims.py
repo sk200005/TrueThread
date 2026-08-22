@@ -33,7 +33,7 @@ from tenacity import (
 )
 
 from app.core.database import async_session
-from app.core.llm_client import get_llm_client
+from app.core.gemini_client import extract_json, get_gemini_client
 from app.graphs.state import ExtractedClaimDict, QueryState
 
 logger = logging.getLogger(__name__)
@@ -157,12 +157,13 @@ async def _call_llm_for_claims(user_message: str) -> str:
     Call the LLM with the claim extraction prompt.
     Wrapped with tenacity for automatic retry with exponential backoff.
     """
-    client = get_llm_client()
+    client = get_gemini_client()
     return await client.chat(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_message,
         temperature=0.1,
-        max_tokens=1024,
+        max_tokens=8192,
+        json_mode=True,
     )
 
 
@@ -198,16 +199,18 @@ def _parse_claims_response(raw_response: str) -> tuple[list[ExtractedClaim], Opt
     if not raw_response or not raw_response.strip():
         return [], "empty response"
 
-    # Strip markdown code fences (same as JS: .replace(/^```(?:json)?\s*/i, '') ...)
-    cleaned = raw_response.strip()
-    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.strip()
-
     try:
-        parsed = json.loads(cleaned)
+        parsed = extract_json(raw_response)
     except json.JSONDecodeError as e:
         return [], str(e)
+
+    if isinstance(parsed, dict):
+        # OpenRouter's json_object format forces a dict, e.g. {"claims": [...]}
+        # Find the first list value inside the dict and use that.
+        for value in parsed.values():
+            if isinstance(value, list):
+                parsed = value
+                break
 
     if not isinstance(parsed, list):
         return [], f"expected array, got {type(parsed).__name__}"
@@ -364,6 +367,10 @@ async def extract_claims(state: QueryState) -> dict[str, Any]:
         try:
             raw_response = await _call_llm_for_claims(user_message)
         except Exception as exc:
+            err_str = str(exc).lower()
+            if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str:
+                raise Exception("LLM API rate limit reached. Please wait and try again.") from exc
+                
             logger.error("LLM call failed after retries for batch %d: %s", batch_num, exc)
             parse_errors += 1
             continue
@@ -396,8 +403,6 @@ async def extract_claims(state: QueryState) -> dict[str, Any]:
                 if skipped:
                     total_skipped_dup += len(comment_claims)
 
-            import asyncio
-            await asyncio.sleep(4)
 
             # Add to state output
             for claim in claims:

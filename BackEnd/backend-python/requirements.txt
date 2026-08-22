@@ -24,3 +24,4 @@ redis>=5.0.0
 youtube-transcript-api>=1.2.4
 playwright>=1.47.0
 yt-dlp>=2024.0
+google-genai>=0.1.0
