@@ -68,7 +68,7 @@ async function submitQuery(req, res, next) {
           sources: sourcesRequested,
         },
         opts: { jobId },
-        children: [
+        children: [      //dependency
           {
             name: 'research-job',
             queueName: 'research',
@@ -148,7 +148,7 @@ async function getJobStatus(req, res, next) {
 async function streamJobProgress(req, res) {
   const { jobId } = req.params;
 
-  // SSE response headers
+  // "Keep this HTTP connection open; I will continuously send events."
   res.set({
     'Content-Type':  'text/event-stream',
     'Cache-Control': 'no-cache',            // Never cache live updates
@@ -165,7 +165,7 @@ async function streamJobProgress(req, res) {
     const rJob = await Job.fromId(researchQueue, jobId);
 
     if (qJob) {
-      const qState = await qJob.getState();
+      const qState = await qJob.getState(); //waiting, active, completed, failed, delayed
       if (qState === 'completed') {
         const results = qJob.returnvalue || {};
         sendEvent(res, {
@@ -208,16 +208,21 @@ async function streamJobProgress(req, res) {
   // ── Live event handlers ───────────────────────────────────────────────
   // BullMQ QueueEvents are queue-wide; we filter by jobId.
 
+  //Handles progress updates from the worker and 
+  // sends them to the frontend via SSE.
+
   function handleProgress({ jobId: jId, data }) {
     if (closed || jId !== jobId) return;
-    const event = (typeof data === 'string') ? JSON.parse(data) : data;
+    const event = (typeof data === 'string') ? JSON.parse(data) : data;  //JSON string--> JavaScript object.
     sendEvent(res, event);
     // The worker sends terminal events via updateProgress too
     if (event.type === 'done' || event.type === 'error') {
-      close();
+      close();            // close the SSE connection.
     }
   }
 
+  //Handles when the job successfully finishes and 
+  // sends the final result.
   function handleCompleted({ jobId: jId, returnvalue }) {
     if (closed || jId !== jobId) return;
     // Fallback — the worker should have already sent a 'done' progress
@@ -232,6 +237,7 @@ async function streamJobProgress(req, res) {
     close();
   }
 
+  //Handles when the job fails and sends the error to the frontend.
   function handleFailed({ jobId: jId, failedReason }) {
     if (closed || jId !== jobId) return;
     sendEvent(res, {
@@ -253,8 +259,8 @@ async function streamJobProgress(req, res) {
   const keepalive = setInterval(() => {
     if (!closed) res.write(': keepalive\n\n');
   }, 30000);
-
-  function close() {
+ 
+  function close() {      //cleaning up and closing the SSE connection.
     if (closed) return;
     closed = true;
     researchQueueEvents.off('progress', handleProgress);
@@ -264,7 +270,7 @@ async function streamJobProgress(req, res) {
     queryQueueEvents.off('failed', handleFailed);
     clearInterval(keepalive);
     res.end();
-  }
+  } //Remove BullMQ event listeners Once the job is finished
 
   // Clean up when the client disconnects early
   req.on('close', close);
@@ -462,7 +468,9 @@ async function chatWithQuery(req, res, next) {
     if (err.response) {
       const errorData = err.response.data || {};
       if (errorData.detail && !errorData.error) {
-        errorData.error = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        errorData.error = typeof errorData.detail === 'string' ? errorData.detail 
+                         : JSON.stringify(errorData.detail);   // convert {"detail": "Query not found"} --> 
+                                                               // { "error": "Query not found", "detail": "Query not found"}
       }
       return res.status(err.response.status).json(errorData);
     }

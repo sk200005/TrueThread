@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
+from app.core.config import settings      #env file reader
 
 from app.worker import start_workers, stop_workers
 from app.routers import chat
@@ -34,11 +34,19 @@ logging.basicConfig(                 #Whenever something is logged, print it in 
 
 
 # ── Lifespan (BullMQ workers) ────────────────────────────────────────────
+# @asynccontextmanager -> This function describes something that has a before, 
+# a running/in-use period, and an after, and those operations are asynchronous."
+
+# reason - Because FastAPI needs to know: When the server starts -> running  -> shutsdown
+# start -> BullMQ workers run in the background
+# running -> Server is running
+# shutdown -> BullMQ workers stop in the background
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):        #I expect app to be a FastAPI object.
     """Start BullMQ workers on boot, stop them on shutdown."""
-    await start_workers()
-    yield
+    await start_workers() 
+    yield                    # yield is acting like a boundary between startup and shutdown.
     await stop_workers()
 
 

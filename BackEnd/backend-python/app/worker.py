@@ -23,7 +23,9 @@ Usage:
     No separate process or CLI needed.
 """
 
-from __future__ import annotations
+from __future__ import annotations #Python doesn't need to evaluate it immediately.
+# Used for type hints, like "list[Worker]",
+# without needing to import list from typing every time.
 
 import logging
 
@@ -57,14 +59,16 @@ def _redis_opts() -> dict:
 async def _update_query_status(
     job_id: str,
     status: str,
-    *,
+    *,          # everything after * must be passed 
+                #using the parameter name.
     sources_failed: list[str] | None = None,
     error_message: str | None = None,
-) -> None:
+) -> None:    # This function is not expected to 
+              # return a useful value.
     """Best-effort update of the queries row in Postgres."""
     try:
-        dsn = settings.database_url.replace("+asyncpg", "")
-        conn = await asyncpg.connect(dsn)
+        link = settings.database_url.replace("+asyncpg", "")
+        conn = await asyncpg.connect(link)
         try:
             if status == "done":
                 await conn.execute(
@@ -134,9 +138,15 @@ async def process_query_job(job, token):
 
 async def start_workers() -> None:                          #This is called by FastAPI during startup.
     """Create and start BullMQ workers for both queues."""
-    opts = _redis_opts()
+    opts = _redis_opts()#Redis connection information
 
-    research_worker = Worker("research", process_research_job, opts) # Create worker for research queue
+
+    # Worker() as a class provided by BullMQ.
+
+    research_worker = Worker("research", process_research_job, opts) 
+    # Create a worker that listens to the research queue. 
+    # Whenever a job arrives, run process_research_job(job, token).
+
     query_worker = Worker("query", process_query_job, opts)           # Create worker for query queue
 
     _workers.extend([research_worker, query_worker])     # Appends both workers to the _workers list
@@ -151,6 +161,6 @@ async def start_workers() -> None:                          #This is called by F
 async def stop_workers() -> None:
     """Gracefully shut down all workers."""
     for w in _workers:
-        await w.close()
-    _workers.clear()
+        await w.close()     
+    _workers.clear()      #Remove all workers from the list.
     logger.info("BullMQ workers stopped")

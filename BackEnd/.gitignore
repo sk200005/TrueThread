@@ -4,3 +4,8 @@ dist/
 build/
 coverage/
 .env
+*.log
+*results.json
+*output.json
+__pycache__/
+*.pyc

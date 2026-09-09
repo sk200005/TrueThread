@@ -12,17 +12,30 @@ Two separate state schemas for two separate graphs:
 """
 
 from __future__ import annotations
+# Python doesn't need to evaluate it immediately.
+# Used for type hints, like "list[Worker]",
+# without needing to import list from typing every time.
 
 from typing import Any, Literal, Optional, TypedDict
+# TypedDict - Describes the expected structure of a dictionary
+# Literal - Only specific values are allowed
+# Any - Can be any type
+# Optional - Can be None or the specified type
 
 import operator
+# operator - performs algebraic operations on objects
+
 from typing import Annotated
+# Annotated - adds metadata to type hints , attach extra information to a type.
 
 # ══════════════════════════════════════════════════════════════════════════
 # Ingestion Graph State (existing — DO NOT MODIFY)
 # ══════════════════════════════════════════════════════════════════════════
 
-class SourceDoc(TypedDict, total=False):
+class SourceDoc(TypedDict, total=False): 
+    #describing the structure of a dictionary.
+    #total=All fields are optional.
+
     """A single fetched document, before chunking."""
 
     source: str                         # "wikipedia" | "reddit" | "youtube" | ...
@@ -34,8 +47,26 @@ class SourceDoc(TypedDict, total=False):
     engagement_metrics: Optional[dict[str, Any]]
     metadata: Optional[dict[str, Any]]
 
+    # doc = {
+    # "source": "reddit",
+    # "author": "John",
+    # "title": "Discussion about AI",
+    # "text": "AI is changing software development...",
+    # "url": "https://reddit.com/...",
+    # "published_at": "2026-09-09",
+    # "engagement_metrics": {
+    #     "upvotes": 120,
+    #     "comments": 30
+    # },
+    # "metadata": {
+    #     "language": "English"
+    # }
+
+
 
 class SourceResult(TypedDict, total=False):
+    #The result of fetching data from one source.
+
     status: Literal["pending", "in_progress", "done", "failed"]
     documents: list[SourceDoc]
     error: str | None
@@ -43,6 +74,23 @@ class SourceResult(TypedDict, total=False):
 
 def merge_sources(a: dict[str, SourceResult], b: dict[str, SourceResult]) -> dict[str, SourceResult]:
     """Deep merge for the sources dict to support concurrent partial writes."""
+
+    # a = {
+    # "reddit": {
+    #     "status": "done"
+    #     }
+    # }
+
+    # b = {
+    # "youtube": {
+    #     "status": "done"
+    # },
+    # "reddit": {
+    #     "documents": [...]
+    #      }
+    # }
+
+
     res = a.copy()
     for k, v in b.items():
         if k in res:

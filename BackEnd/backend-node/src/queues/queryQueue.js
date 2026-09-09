@@ -22,8 +22,10 @@ const connection = {
   port: parseInt(process.env.REDIS_PORT || '6379'),
 };
 
-const queryQueue = new Queue('query', { connection });            //Just creates (or connects if already exists) a queue named      
-const queryQueueEvents = new QueueEvents('query', { connection }); // This connects an event listener to the same queue. This is used to track
+const queryQueue = new Queue('query', { connection });            
+//Just creates (or connects if already exists) a queue named      
+const queryQueueEvents = new QueueEvents('query', { connection }); 
+// This connects an event listener to the same queue. This is used to track
                                                                    
                                                                    
 queryQueue.on('error', (err) => {
