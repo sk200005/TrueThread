@@ -77,24 +77,35 @@ def merge_sources(a: dict[str, SourceResult], b: dict[str, SourceResult]) -> dic
 
     # a = {
     # "reddit": {
-    #     "status": "done"
+    #     "status": "done",
+    #     "documents": [...],
+    #     "error": None,
+    #     "skipped": []
     #     }
     # }
 
     # b = {
     # "youtube": {
-    #     "status": "done"
+    #     "status": "done",
+    #     "documents": [...],
+    #     "error": None,
+    #     "skipped": []
     # },
     # "reddit": {
+    #    "status": "done",
     #     "documents": [...]
+    #     "error": None,
+    #     "skipped": []
     #      }
     # }
 
 
     res = a.copy()
-    for k, v in b.items():
+    for k, v in b.items(): 
         if k in res:
             res[k] = {**res[k], **v}
+            # Take everything from dict1(a) and add to
+            # it all the values from dict2(b)
         else:
             res[k] = v
     return res
