@@ -51,6 +51,7 @@ def extract_keywords(query: str) -> str:
 
 def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
     
+    
     """
     Search Wikipedia for article titles matching the query.
 
