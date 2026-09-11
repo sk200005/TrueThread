@@ -249,3 +249,4 @@ class QueryState(TypedDict, total=False):
 
     # ── Bookkeeping ───────────────────────────────────────────────────────
     status: Literal["pending", "retrieving", "extracting", "classifying", "verifying", "summarizing", "done", "error"]
+

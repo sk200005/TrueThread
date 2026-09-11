@@ -50,6 +50,7 @@ def extract_keywords(query: str) -> str:
     return " ".join(keywords)
 
 def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
+    
     """
     Search Wikipedia for article titles matching the query.
 
@@ -76,15 +77,33 @@ def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
             "User-Agent": "SwayamsResearchApp/1.0 (swayam-test-app; swayam@example.com)",
         }
         resp = requests.get(url, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
+        resp.raise_for_status() 
+        # check if the status code of the response is 200 else it will raise an error
         data = resp.json()
         
         results = data.get("query", {}).get("search", [])
         return [item["title"] for item in results]
+
     except Exception as exc:
         logger.warning("Wikipedia search failed: %s", exc)
         return []
 
+
+        # {
+        #     "query": {
+        #         "search": [
+        #             {"title": "Tesla, Inc."},
+        #             {"title": "Tesla (unit)"},
+        #             ...
+        #         ]
+        #     }
+        # }
+
+
+
+# This code is the Wikipedia verification/fetching part of the pipeline. 
+# It searches Wikipedia, keeps the top 3 results, fetches their content, 
+# converts them into your SourceDoc format, and handles failures safely.
 
 async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
     """
@@ -106,10 +125,13 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
 
 
     try:
-        import asyncio
+        import asyncio      #provides Python's asynchronous programming tools.
+        # creates or retrieves an asyncio event loop for the current thread.
         loop = asyncio.get_running_loop()
-        
+        # Runs the blocking _search_wikipedia() in a separate thread and returns the result.
+
         titles = await asyncio.to_thread(_search_wikipedia, query)
+
         logger.info("Wikipedia search returned %d titles: %s", len(titles), titles)
 
         if not titles:
@@ -128,6 +150,7 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
         filtered_titles = titles[:3]
         logger.info("Kept top 3 titles: %s", filtered_titles)
 
+        #One article at a time
         def _fetch_page(title: str) -> SourceDoc | None:
             page = _wiki.page(title)
             if not page.exists():
@@ -184,3 +207,7 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
             }
         }
     }
+
+
+
+#A disambiguation page is a page on Wikipedia that lists other pages that have similar titles.

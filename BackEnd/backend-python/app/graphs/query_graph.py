@@ -46,7 +46,9 @@ def route_verification(state: QueryState) -> list[str]:
     """
     classified_claims = state.get("classified_claims", [])
     
+    # Checks whether at least one claim needs news verification.
     has_news = any(c.get("route") in ("news", "both") for c in classified_claims)
+    # Checks whether at least one claim needs Wikipedia verification.
     has_wiki = any(c.get("route") in ("wikipedia", "both") for c in classified_claims)
 
     routes = []
