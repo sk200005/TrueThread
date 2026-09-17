@@ -32,7 +32,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from app.core.llm_client import get_llm_client
+from app.core.gemini_client import extract_json, get_gemini_client
 from app.graphs.state import ClassifiedClaimDict, QueryState
 
 logger = logging.getLogger(__name__)
@@ -115,12 +115,13 @@ If no claims are provided or all are empty, return [].
 )
 async def _call_llm_for_classification(user_message: str) -> str:
     """Call the LLM with the classification prompt. Retries with backoff."""
-    client = get_llm_client()
+    client = get_gemini_client()
     return await client.chat(
         system_prompt=CLASSIFY_SYSTEM_PROMPT,
         user_prompt=user_message,
         temperature=0.1,
         max_tokens=1024,
+        json_mode=True,
     )
 
 
@@ -154,14 +155,9 @@ def _parse_classification_response(
     if not raw_response or not raw_response.strip():
         return [], "empty response"
 
-    # Strip markdown code fences (same pattern as extract_claims.py)
-    cleaned = raw_response.strip()
-    cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.strip()
-
+    # Use the shared extract_json helper (handles fences, prose, nested objects)
     try:
-        parsed = json.loads(cleaned)
+        parsed = extract_json(raw_response)
     except json.JSONDecodeError as e:
         return [], str(e)
 

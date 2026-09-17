@@ -2,6 +2,22 @@
 graphs/nodes/youtube_node.py — Fetch YouTube content for a research query.
 """
 
+
+#                Research Query
+#                       ↓
+#                Search YouTube (up to 50 videos)
+#                       ↓
+#                Rank/select best 3 videos
+#                       ↓
+#                Get transcript for each
+#                       ↓
+#                Valid transcript?
+#                    ↓ Yes       ↓ No
+#                Create Doc    Skip + reason
+#                    ↓
+#                Store in ResearchState
+
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +44,13 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
     sources = state.get("sources", {})
     youtube_state = sources.get("youtube", {})
 
+    #                   "youtube": {
+    #                       "status": "done",
+    #                       "documents": [...],
+    #                       "error": None,
+    #                       "skipped": []
+    #                   },
+
     if youtube_state.get("status") == "done":
         logger.info("YouTube fetch already done, skipping.")
         return {"sources": {"youtube": youtube_state}}
@@ -51,13 +74,16 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
                 
             video_id = video["videoId"]
             logger.info("Processing YouTube candidate: %s - %s", video_id, video["title"])
+
+            # get_transcript_with_reason() is synchronous/blocking, but youtube_fetch() is async.
+            # run_in_executor -> runs the synchronous transcript function in a separate 
+            #                    executor/thread so it doesn't block the async event loop.
             
-            # Since get_transcript is synchronous, we run it in the default executor
             loop = asyncio.get_running_loop()
             transcript_obj, skip_reason = await loop.run_in_executor(
-                None,
-                youtube_client.get_transcript_with_reason,
-                video_id,
+                None,                                       # Use asyncio's default executor (thread pool)
+                youtube_client.get_transcript_with_reason,  # function to run
+                video_id,                                   # argument to function
             )
             
             if not transcript_obj:
@@ -145,3 +171,7 @@ async def youtube_fetch(state: ResearchState) -> dict[str, Any]:
             }
         }
     }
+
+
+# asyncio is Python's built-in library for running tasks asynchronously.
+

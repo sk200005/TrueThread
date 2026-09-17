@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-import re
+import re               # Regular Expression (Regex) module.
 from typing import Any
 
 import wikipediaapi
@@ -32,8 +32,7 @@ _wiki = wikipediaapi.Wikipedia(
 )
 
 
-import re
-
+# re - provides functions for searching, matching, replacing, and manipulating text patterns.
 def extract_keywords(query: str) -> str:
     """Strips conversational words so Wikipedia's strict search engine can find results."""
     stopwords = {
@@ -44,7 +43,8 @@ def extract_keywords(query: str) -> str:
     words = query.split()
     keywords = []
     for w in words:
-        w_clean = re.sub(r'[^\w\s]', '', w)
+        w_clean = re.sub(r'[^\w\s]', '', w)    # "(India,!)" →  "India" # removes any character that is NOT a letter, number, or whitespace
+
         if w_clean.lower() not in stopwords and len(w_clean) > 0:
             keywords.append(w_clean)
     return " ".join(keywords)
@@ -58,31 +58,32 @@ def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
     Extracts keywords from conversational queries and uses the robust 
     full-text 'srsearch' API for better matching.
     """
-    import requests
+    import requests   #  Python library used to send HTTP requests to websites and APIs ~ axios in JS.
 
     search_query = extract_keywords(query)
     # If stripping leaves it empty, fallback to original query
     if not search_query.strip():
         search_query = query
         
-    url = "https://en.wikipedia.org/w/api.php"
-    params = {
-        "action": "query",
-        "list": "search",
-        "srsearch": search_query,
+    url = "https://en.wikipedia.org/w/api.php"            # IMPORTANT
+    params = {                        
+        "action": "query",  
+        "list": "search",  
+        "srsearch": search_query,         
         "format": "json",
-        "srlimit": limit,
+        "srlimit": limit,                 
     }
     try:
         headers = {
             "User-Agent": "SwayamsResearchApp/1.0 (swayam-test-app; swayam@example.com)",
         }
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp = requests.get(url, params=params, headers=headers, timeout=10)       # IMPORTANT
+
         resp.raise_for_status() 
         # check if the status code of the response is 200 else it will raise an error
         data = resp.json()
         
-        results = data.get("query", {}).get("search", [])
+        results = data.get("query", {}).get("search", []) 
         return [item["title"] for item in results]
 
     except Exception as exc:
@@ -90,7 +91,7 @@ def _search_wikipedia(query: str, limit: int = MAX_ARTICLES) -> list[str]:
         return []
 
 
-        # {
+        # data : {
         #     "query": {
         #         "search": [
         #             {"title": "Tesla, Inc."},
@@ -129,9 +130,12 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
         import asyncio      #provides Python's asynchronous programming tools.
         # creates or retrieves an asyncio event loop for the current thread.
         loop = asyncio.get_running_loop()
-        # Runs the blocking _search_wikipedia() in a separate thread and returns the result.
+        # Give me the event loop that is currently running this async code
+        # _search_wikipedia() is a synchronous (blocking) function.
 
         titles = await asyncio.to_thread(_search_wikipedia, query)
+        #It runs a normal synchronous/blocking function in a separate 
+        # thread so that it doesn't block your async event loop.
 
         logger.info("Wikipedia search returned %d titles: %s", len(titles), titles)
 
@@ -159,6 +163,8 @@ async def wikipedia_fetch(state: ResearchState) -> dict[str, Any]:
                 return None
             
             # Skip disambiguation pages — they're lists, not content
+            # Disambiguation pages are pages that list other pages that have similar titles.
+            # So we skip them. ex : Apple (fruit) and Apple (company)
             if "disambiguation" in (page.summary or "").lower() and len(page.text) < 500:
                 logger.debug("Skipping disambiguation page: %s", title)
                 return None

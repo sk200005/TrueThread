@@ -155,7 +155,7 @@ async def _save_report_to_db(query_id: str, report: dict[str, Any]) -> str | Non
     """
     Insert the report into the reports table.
 
-    Uses the JSONB columns: sentiment_summary, themes, verified_claims.
+    Uses the JSONB columns: sentiment_summary, themes, verified_claims, extracted_claims.
     Returns the new report UUID on success, None on failure.
     """
     report_id = str(uuid.uuid4())
@@ -164,12 +164,13 @@ async def _save_report_to_db(query_id: str, report: dict[str, Any]) -> str | Non
         async with async_session() as session:
             await session.execute(
                 text("""
-                    INSERT INTO reports (id, query_id, sentiment_summary, themes, verified_claims)
-                    VALUES (:id, :query_id, :sentiment_summary, :themes, :verified_claims)
+                    INSERT INTO reports (id, query_id, sentiment_summary, themes, verified_claims, extracted_claims)
+                    VALUES (:id, :query_id, :sentiment_summary, :themes, :verified_claims, :extracted_claims)
                     ON CONFLICT (query_id) DO UPDATE SET
                         sentiment_summary = EXCLUDED.sentiment_summary,
                         themes = EXCLUDED.themes,
-                        verified_claims = EXCLUDED.verified_claims
+                        verified_claims = EXCLUDED.verified_claims,
+                        extracted_claims = EXCLUDED.extracted_claims
                 """),
                 {
                     "id": report_id,
@@ -180,6 +181,7 @@ async def _save_report_to_db(query_id: str, report: dict[str, Any]) -> str | Non
                     }),
                     "themes": json.dumps(report.get("themes", [])),
                     "verified_claims": json.dumps(report.get("verified_claims", [])),
+                    "extracted_claims": json.dumps(report.get("extracted_claims", [])),
                 },
             )
             await session.commit()
@@ -214,12 +216,14 @@ async def summarize(state: QueryState) -> dict[str, Any]:
     query_id = state.get("query_id")
     chunks = state.get("retrieved_chunks", [])
     claims = state.get("extracted_claims", [])
+    classified_claims = state.get("classified_claims", [])
     verified_claims = state.get("verified_claims", [])
 
     if not chunks:
         logger.info("No chunks to summarize.")
         fallback = _make_fallback_report(query)
         fallback["verified_claims"] = []
+        fallback["extracted_claims"] = []
         if query_id:
             await _save_report_to_db(query_id, fallback)
         return {"final_report": fallback, "status": "summarizing"}
@@ -249,6 +253,7 @@ async def summarize(state: QueryState) -> dict[str, Any]:
         logger.error("LLM call failed for summarization: %s", exc)
         fallback = _make_fallback_report(query)
         fallback["verified_claims"] = []
+        fallback["extracted_claims"] = classified_claims if classified_claims else claims
         if query_id:
             await _save_report_to_db(query_id, fallback)
         return {"final_report": fallback, "status": "error"}
@@ -260,14 +265,17 @@ async def summarize(state: QueryState) -> dict[str, Any]:
         logger.warning("Using fallback report due to parse failure.")
         report = _make_fallback_report(query)
 
-    # Add the raw query and verified claims for context
+    # Add the raw query, verified claims, and extracted claims for context
     report["query"] = query
     report["verified_claims"] = verified_claims
+    # Use classified_claims (which include routing info) if available, else raw extracted_claims
+    report["extracted_claims"] = classified_claims if classified_claims else claims
 
     logger.info("Report generated:")
     logger.info("  Sentiment : %s", report.get("overall_sentiment", "unknown"))
     logger.info("  Themes    : %d", len(report.get("themes", [])))
     logger.info("  Summary   : %s", report.get("summary", "")[:100])
+    logger.info("  Extracted Claims: %d", len(report.get("extracted_claims", [])))
     logger.info("  Verified Claims: %d", len(report.get("verified_claims", [])))
 
     # ── Save to DB ───────────────────────────────────────────────────────

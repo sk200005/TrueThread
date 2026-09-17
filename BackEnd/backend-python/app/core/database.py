@@ -27,6 +27,7 @@ async_session = async_sessionmaker(
 )
 
 
+
 class Base(DeclarativeBase):
     """Declarative base for all SQLAlchemy models."""
     pass

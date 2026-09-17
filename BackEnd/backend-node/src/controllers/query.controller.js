@@ -67,7 +67,7 @@ async function submitQuery(req, res, next) {
           queryText: queryText.trim(),
           sources: sourcesRequested,
         },
-        opts: { jobId },
+        opts: { jobId, removeOnComplete: true, removeOnFail: 20 },
         children: [      //dependency
           {
             name: 'research-job',
@@ -78,7 +78,7 @@ async function submitQuery(req, res, next) {
               queryText: queryText.trim(),
               sources: sourcesRequested,
             },
-            opts: { jobId },
+            opts: { jobId, removeOnComplete: true, removeOnFail: 20 },
           }
         ]
       });
@@ -345,7 +345,7 @@ async function retryJob(req, res, next) {
           queryText: job.query_text,
           sources: sourcesToRetry,
         },
-        opts: { jobId },
+        opts: { jobId, removeOnComplete: true, removeOnFail: 20 },
         children: [
           {
             name: 'research-job',
@@ -356,7 +356,7 @@ async function retryJob(req, res, next) {
               queryText: job.query_text,
               sources: sourcesToRetry,
             },
-            opts: { jobId },
+            opts: { jobId, removeOnComplete: true, removeOnFail: 20 },
           }
         ]
       });

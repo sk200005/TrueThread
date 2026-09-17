@@ -23,3 +23,41 @@ approach you think while solving the problem
 
 source venv/bin/activate
 python test_yt_3.py "operation sindoor"
+
+
+[20:10:36]
+[system]
+type=connected status=connected
+[20:10:36]
+[wikipedia]
+type=progress status=started
+[20:10:57]
+[reddit]
+type=progress status=done
+[20:10:57]
+[youtube]
+type=progress status=done
+[20:10:57]
+[wikipedia]
+type=progress status=done
+[20:10:58]
+[system]
+type=connected status=connected
+[20:10:58]
+[rag_retrieve]
+type=progress status=started
+[20:11:40]
+[rag_retrieve]
+type=progress status=done
+[20:11:40]
+[extract_claims]
+type=progress status=done
+[20:11:40]
+[classify_claims]
+type=progress status=done
+[20:11:40]
+[summarize]
+type=progress status=done
+[20:11:40]
+[system]
+type=done status=done

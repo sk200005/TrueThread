@@ -20,11 +20,17 @@ const AVAILABLE_SOURCES = [
 ];
 
 export default function QueryForm({ onJobCreated }) {
+  // HLD: State Management
+  // Maintains local UI state for the research query input (queryText), user-selected data sources (selectedSources),
+  // as well as UI feedback states during network requests (loading indicator and error messages).
   const [queryText, setQueryText] = useState('');
   const [selectedSources, setSelectedSources] = useState(['reddit', 'youtube', 'wikipedia']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // HLD: Source Selection Logic
+  // Acts as a toggler for the research sources. It ensures at least one source can be selected
+  // and dynamically updates the selectedSources array, which dictates where the backend will scrape data from.
   function toggleSource(sourceId) {
     setSelectedSources((prev) =>
       prev.includes(sourceId)
@@ -33,6 +39,12 @@ export default function QueryForm({ onJobCreated }) {
     );
   }
 
+  // HLD: API Interaction & Data Flow
+  // 1. Validates user input before proceeding.
+  // 2. Triggers the backend API (`submitQuery`) to initiate a new async research task.
+  // 3. Persists the returned job metadata (like jobId) locally via `addJob` so it survives page reloads.
+  // 4. Emits an event (`onJobCreated`) back up to the parent component (App.jsx) to transition the UI 
+  //    from the input form to the LiveStatus monitoring view.
   async function handleSubmit(e) {
     e.preventDefault();
     if (!queryText.trim()) return;
@@ -59,6 +71,10 @@ export default function QueryForm({ onJobCreated }) {
     }
   }
 
+  // HLD: UI Rendering & User Interaction
+  // Renders a controlled form component consisting of a text area for the query, 
+  // dynamic checkbox buttons for available sources, and a submit button that handles 
+  // loading states and form validation to prevent empty submissions.
   return (
     <div className="animate-fade-in">
       <div className="glass-card" style={{ marginBottom: 24 }}>

@@ -21,6 +21,10 @@ import { getToken, getStreamUrl } from './client.js';
 /**
  * Create a managed SSE connection to a job's stream endpoint.
  *
+ * 
+ * JSDoc. It is documentation written above the function 
+ * to explain what it accepts, does, and returns.
+ * 
  * @param {string} jobId - The job UUID to stream
  * @param {object} callbacks
  * @param {(event: object) => void} callbacks.onEvent - Called for each parsed SSE event
@@ -50,7 +54,8 @@ export function createSSEConnection(jobId, { onEvent, onConnectionChange, onErro
     onConnectionChange?.('connecting');
 
     try {
-      abortController = new AbortController();
+      abortController = new AbortController(); 
+      //AbortController = a built-in mechanism for cancelling an ongoing async operation.
 
       const res = await fetch(getStreamUrl(jobId), {
         headers: {
@@ -78,20 +83,21 @@ export function createSSEConnection(jobId, { onEvent, onConnectionChange, onErro
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true }); // might the whole message do not fit in one chunk 
 
         // Parse complete SSE messages from the buffer.
         // SSE format: "data: <JSON>\n\n"
         // Keepalives: ": keepalive\n\n" (lines starting with : are comments)
         const messages = buffer.split('\n\n');
         // Keep the last (possibly incomplete) chunk in the buffer
-        buffer = messages.pop() || '';
+        buffer = messages.pop() || '';  // remove last incomplete message
 
         for (const msg of messages) {
           if (!msg.trim()) continue;
 
           // Skip SSE comments (keepalive pings)
-          if (msg.trim().startsWith(':')) continue;
+          if (msg.trim().startsWith(':')) continue;    // might send ": keepalive" 
+          
 
           // Extract data from "data: <JSON>" lines
           const lines = msg.split('\n');
@@ -166,3 +172,21 @@ export function createSSEConnection(jobId, { onEvent, onConnectionChange, onErro
 
   return { close };
 }
+
+
+
+
+//        Backend sends:
+
+// data: {"type":"status","status":"processing"}
+// : keepalive
+// data: {"type":"status","status":"completed"}
+// data: {"type":"done"}
+
+
+
+//       Frontend ultimately receives through onEvent():
+
+// { type: "status", status: "processing" }
+// { type: "status", status: "completed" }
+// { type: "done" }

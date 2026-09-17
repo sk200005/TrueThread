@@ -35,23 +35,23 @@ function _save(jobs) {
  * Add a newly submitted job to history.
  */
 export function addJob(jobId, queryText, sources = []) {
-  const jobs = _load();
-  // Avoid duplicates
+  const jobs = _load();    // Loads existing array of jobs from browser's Local Storage.
+  //Avoid duplicates
   if (jobs.some((j) => j.jobId === jobId)) return;
 
-  jobs.unshift({
+  jobs.unshift({ // Adds Job to beginning (unshift) of the jobs array
     jobId,
     queryText,
-    status: 'pending',
+    status: 'pending',  // set starting status as pending
     sources,
     createdAt: new Date().toISOString(),
     reportId: null,
   });
 
   // Keep max 50 entries
-  if (jobs.length > 50) jobs.length = 50;
+  if (jobs.length > 50) jobs.length = 50;    // chop off last jobs to limit total jobs to 50 only
 
-  _save(jobs);
+  _save(jobs); // saves it back into the browser's Local Storage
 }
 
 /**

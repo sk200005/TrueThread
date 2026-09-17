@@ -187,3 +187,5 @@ async def store_documents(state: ResearchState) -> dict[str, Any]:
             "chunksInserted": chunks_inserted,
         },
     }
+
+

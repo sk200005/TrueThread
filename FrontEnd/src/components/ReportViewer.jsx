@@ -59,6 +59,28 @@ const SENTIMENT_CONFIG = {
   neutral: { icon: '😐', className: 'sentiment-neutral' },
 };
 
+// ── Claim type configuration ─────────────────────────────────────────
+const CLAIM_TYPE_CONFIG = {
+  factual:       { icon: '📌', label: 'Factual' },
+  comparison:    { icon: '⚖️', label: 'Comparison' },
+  effectiveness: { icon: '✦', label: 'Effectiveness' },
+  warning:       { icon: '⚠', label: 'Warning' },
+  opinion:       { icon: '💭', label: 'Opinion' },
+};
+
+const ROUTE_CONFIG = {
+  news:      { icon: '📰', label: 'News', className: 'route-news' },
+  wikipedia: { icon: '📚', label: 'Wikipedia', className: 'route-wikipedia' },
+  both:      { icon: '🔗', label: 'Both', className: 'route-both' },
+  skip:      { icon: '⏭', label: 'Skipped', className: 'route-skip' },
+};
+
+const CONFIDENCE_ICON = {
+  high: '🟢',
+  medium: '🟡',
+  low: '🔴',
+};
+
 function formatDate(isoString) {
   if (!isoString) return '';
   return new Date(isoString).toLocaleString(undefined, {
@@ -142,6 +164,7 @@ export default function ReportViewer({ reportId, onBack }) {
   const reportSummary = report.sentiment_summary?.summary || '';
   const themes = report.themes || [];
   const verifiedClaims = report.verified_claims || [];
+  const extractedClaims = report.extracted_claims || [];
   const sourcesRequested = report.sources_requested || [];
   const sourcesFailed = report.sources_failed || [];
   const rawData = report.raw_data || [];
@@ -285,6 +308,60 @@ export default function ReportViewer({ reportId, onBack }) {
             </div>
           )}
 
+          {/* Extracted Claims */}
+          {extractedClaims.length > 0 && (
+            <div className="report-section">
+              <div className="report-section-title">
+                Extracted Claims ({extractedClaims.length})
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: 14, lineHeight: 1.5 }}>
+                Claims identified from the source data by the AI. Each claim is classified by type, confidence,
+                and routed to the appropriate verification source.
+              </p>
+              <div className="extracted-claims-grid">
+                {extractedClaims.map((claim, idx) => {
+                  const typeCfg = CLAIM_TYPE_CONFIG[claim.claim_type] || CLAIM_TYPE_CONFIG.opinion;
+                  const routeCfg = ROUTE_CONFIG[claim.route] || ROUTE_CONFIG.skip;
+                  const confIcon = CONFIDENCE_ICON[claim.confidence] || CONFIDENCE_ICON.medium;
+                  const entities = claim.entities || [];
+
+                  return (
+                    <div key={idx} className="extracted-claim-card animate-fade-in" style={{ animationDelay: `${idx * 40}ms` }}>
+                      <div className="extracted-claim-text">
+                        {claim.claim_text}
+                      </div>
+                      <div className="extracted-claim-meta">
+                        <span className={`claim-type-badge claim-type-${claim.claim_type || 'opinion'}`}>
+                          {typeCfg.icon} {typeCfg.label}
+                        </span>
+                        <span className="claim-confidence-badge">
+                          {confIcon} {claim.confidence || 'medium'}
+                        </span>
+                        {claim.route && (
+                          <span className={`claim-route-badge ${routeCfg.className}`}>
+                            {routeCfg.icon} {routeCfg.label}
+                          </span>
+                        )}
+                        {claim.verifiable === false && (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Non-verifiable
+                          </span>
+                        )}
+                      </div>
+                      {entities.length > 0 && (
+                        <div className="claim-entities">
+                          {entities.map((e, ei) => (
+                            <span key={ei} className="entity-tag">{e}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Verified Claims */}
           <div className="report-section">
             <div className="report-section-title">
@@ -294,7 +371,9 @@ export default function ReportViewer({ reportId, onBack }) {
             {verifiedClaims.length === 0 && (
               <div className="glass-panel" style={{ textAlign: 'center', padding: 24 }}>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  No claims were extracted for this report.
+                  {extractedClaims.length > 0
+                    ? 'All extracted claims were classified as opinions or subjective — no factual claims were sent for verification.'
+                    : 'No claims were extracted for this report.'}
                 </p>
               </div>
             )}

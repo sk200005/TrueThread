@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS reports (
     sentiment_summary JSONB,              -- {"positive": 62, "negative": 28, "neutral": 10}
     themes JSONB,                         -- array of ThemeSummary objects
     verified_claims JSONB,                -- array of ClaimVerification objects
+    extracted_claims JSONB,               -- array of ExtractedClaim objects
     created_at TIMESTAMPTZ DEFAULT now()
 );
 

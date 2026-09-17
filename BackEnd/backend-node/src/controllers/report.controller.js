@@ -36,7 +36,7 @@ async function getReport(req, res, next) {
 
     const { rows } = await db.query(
       `SELECT r.id, r.query_id, q.query_text, q.sources_requested, q.sources_failed,
-              r.sentiment_summary, r.themes, r.verified_claims, r.created_at
+              r.sentiment_summary, r.themes, r.verified_claims, r.extracted_claims, r.created_at
        FROM reports r
        JOIN queries q ON q.id = r.query_id
        WHERE r.id = $1 AND q.user_id = $2`,
