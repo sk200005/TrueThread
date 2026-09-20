@@ -27,8 +27,8 @@ export default function Chatbot({ jobId }) {
     setIsLoading(true);
 
     try {
-      const { response } = await chatWithQuery(jobId, userMessage);
-      setMessages(prev => [...prev, { role: 'ai', content: response }]);
+      const { response, contexts } = await chatWithQuery(jobId, userMessage);
+      setMessages(prev => [...prev, { role: 'ai', content: response, contexts }]);
     } catch (err) {
       setMessages(prev => [...prev, { role: 'ai', content: 'Error: ' + err.message, isError: true }]);
     } finally {
@@ -60,6 +60,16 @@ export default function Chatbot({ jobId }) {
         {messages.map((msg, idx) => (
           <div key={idx} className={`chatbot-message ${msg.role === 'user' ? 'message-user' : 'message-ai'} ${msg.isError ? 'message-error' : ''}`}>
             <div className="message-bubble">{msg.content}</div>
+            {msg.contexts && msg.contexts.length > 0 && (
+              <div style={{ fontSize: '0.75rem', marginTop: '5px', background: 'rgba(0,0,0,0.1)', padding: '5px', borderRadius: '4px' }}>
+                <strong>Sources:</strong>
+                <ul style={{ margin: 0, paddingLeft: '15px' }}>
+                  {msg.contexts.map((ctx, i) => (
+                    <li key={i} title={ctx}>{ctx.substring(0, 60)}...</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ))}
         {isLoading && (

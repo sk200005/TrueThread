@@ -60,7 +60,7 @@ async def chat_with_query(
             user_prompt=request.message
         )
         
-        return ChatResponse(response=response_text)
+        return ChatResponse(response=response_text, contexts=chunks)
         
     except EmbeddingError as e:
         logger.error(f"Embedding error: {e}")

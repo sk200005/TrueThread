@@ -153,7 +153,7 @@ class GeminiClient:
                 logger.warning("Gemini generate_content failed (%s); retrying config.", exc)
         if last_exc is not None:
             err_str = str(last_exc).lower()
-            if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str:
+            if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "resourceexhausted" in err_str or "503" in err_str or "unavailable" in err_str:
                 logger.warning("Gemini rate limit hit, falling back to OpenRouter...")
                 try:
                     from app.core.fallback_client import get_fallback_client

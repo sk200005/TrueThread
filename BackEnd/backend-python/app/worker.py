@@ -54,7 +54,6 @@ def _redis_opts() -> dict:
 # ── Postgres helpers ─────────────────────────────────────────────────────
 # The worker updates the `queries` table directly so that Node's
 # getJobStatus endpoint (which reads from Postgres) reflects the real
-# status. The old REST-based flow never did this — it's a fix.
 
 async def _update_query_status(
     job_id: str,

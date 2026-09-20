@@ -113,7 +113,7 @@ async def run_pipeline(job) -> dict:
         # Emit: wikipedia fetch started
         await _emit(job, {"type": "progress", "source": "wikipedia", "status": "started"})
 
-        # Run the full graph
+        # ----------------------------------Run the full graph-------------------------------------------------
         final_state = await compiled_graph.ainvoke(initial_state)   # Starts executing this graph using the provided state.
 
         # Collect results from the final state
