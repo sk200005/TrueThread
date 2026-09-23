@@ -61,3 +61,11 @@ type=progress status=done
 [20:11:40]
 [system]
 type=done status=done
+
+
+existing ragas_report.csv file:
+
+Faithfulness: 0.88
+Answer Relevancy: 0.78
+Context Precision: 0.51
+Context Recall: 0.80
