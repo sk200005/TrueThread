@@ -205,7 +205,6 @@ TrueThread/
 
 ## 📸 Screenshots
 
-> Add screenshots to the `docs/` folder and update the paths below.
 
 | Ask a Question | Verified Summary |
 | :---: | :---: |
