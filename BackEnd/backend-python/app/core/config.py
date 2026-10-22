@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
 
+    # ── pgvector IVFFlat Configuration ────────────────────────────────────
+    # Number of lists (probes) to scan during IVFFlat vector search.
+    # Default is 3 (checks 3 closest clusters out of 100 lists for higher recall).
+    ivfflat_probes: int = 3
+
     # ── Groq LLM Model ───────────────────────────────────────────────
     # Model used for lightweight classification/routing tasks (via OpenAI-compatible API).
     # llama3-8b-8192 was decommissioned by Groq; groq/compound-mini is the active replacement

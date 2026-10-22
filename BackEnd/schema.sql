@@ -99,6 +99,9 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_query_id ON document_chunks(query
 CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
+-- Number of IVFFlat lists (probes) to scan during similarity search (default: 3)
+ALTER DATABASE postgres SET ivfflat.probes = 3;
+
 -- ==========================================
 -- Job Checkpoints
 -- Persists the last successfully processed item ID per (job, source) pair.

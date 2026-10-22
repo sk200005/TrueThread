@@ -22,6 +22,7 @@ from typing import Any
 
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.core.database import async_session
 from app.graphs.state import QueryState, RetrievedChunk
 
@@ -112,6 +113,7 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
     retrieved_chunks: list[RetrievedChunk] = []
 
     async with async_session() as session:
+        await session.execute(text(f"SET ivfflat.probes = {settings.ivfflat_probes}"))
         result = await session.execute(sql, params)
         rows = result.fetchall()
 

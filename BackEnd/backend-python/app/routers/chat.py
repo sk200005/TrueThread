@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from typing import Any
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.ingestion.embedder import Embedder, EmbeddingError
@@ -33,6 +34,7 @@ async def chat_with_query(
             LIMIT 5
         """)
         
+        await db.execute(text(f"SET ivfflat.probes = {settings.ivfflat_probes}"))
         result = await db.execute(sql, {
             "query_embedding": str(query_embedding),
             "query_id": str(request.query_id)

@@ -242,6 +242,7 @@ CREATE INDEX idx_document_chunks_query_id ON document_chunks(query_id);
 -- Vector similarity index (IVFFlat — good enough at small/medium scale)
 CREATE INDEX idx_document_chunks_embedding ON document_chunks
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+ALTER DATABASE postgres SET ivfflat.probes = 3;
 ```
 
 ### 4.3 Example Retrieval Query (RAG step)
