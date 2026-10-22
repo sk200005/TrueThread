@@ -150,7 +150,7 @@ SYSTEM_PROMPT = (
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=2, min=2, max=30),
     retry=retry_if_exception_type(Exception),
-    reraise=True,
+    reraise=True,  # throw the actual underlying error
 )
 async def _call_llm_for_claims(user_message: str) -> str:
     """

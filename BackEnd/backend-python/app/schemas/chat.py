@@ -8,3 +8,6 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     contexts: list[str] = []
+
+# This class is a data model whose fields,
+#  types, and values should be validated by Pydantic.
