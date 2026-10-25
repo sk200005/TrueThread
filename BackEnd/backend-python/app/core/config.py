@@ -34,9 +34,12 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
 
-    # ── pgvector IVFFlat Configuration ────────────────────────────────────
-    # Number of lists (probes) to scan during IVFFlat vector search.
-    # Default is 3 (checks 3 closest clusters out of 100 lists for higher recall).
+    # ── pgvector HNSW Configuration ───────────────────────────────────────
+    # Size of dynamic candidate list during query time (default: 40).
+    # Higher values increase recall at the cost of slight query latency.
+    hnsw_ef_search: int = 40
+
+    # Retained for backwards compatibility
     ivfflat_probes: int = 3
 
     # ── Groq LLM Model ───────────────────────────────────────────────

@@ -92,15 +92,12 @@ CREATE INDEX IF NOT EXISTS idx_queries_user_id ON queries(user_id);
 CREATE INDEX IF NOT EXISTS idx_source_documents_query_id ON source_documents(query_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_query_id ON document_chunks(query_id);
 
--- Vector similarity index (IVFFlat — good enough at small/medium scale)
--- NOTE: This index requires at least 100 rows in the table before it is
--- useful. For small datasets, a sequential scan may be faster. The lists=100
--- value should be set to roughly sqrt(row_count) in production.
-CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+-- Vector similarity index (HNSW — high recall, works dynamically from 0 rows onwards)
+CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding_hnsw ON document_chunks
+    USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
 
--- Number of IVFFlat lists (probes) to scan during similarity search (default: 3)
-ALTER DATABASE postgres SET ivfflat.probes = 3;
+-- Number of candidates to evaluate during similarity search (default: 40)
+ALTER DATABASE postgres SET hnsw.ef_search = 40;
 
 -- ==========================================
 -- Job Checkpoints

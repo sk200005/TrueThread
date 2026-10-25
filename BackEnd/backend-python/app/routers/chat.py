@@ -34,7 +34,7 @@ async def chat_with_query(
             LIMIT 5
         """)
         
-        await db.execute(text(f"SET ivfflat.probes = {settings.ivfflat_probes}"))
+        await db.execute(text(f"SET hnsw.ef_search = {settings.hnsw_ef_search}"))
         result = await db.execute(sql, {
             "query_embedding": str(query_embedding),
             "query_id": str(request.query_id)

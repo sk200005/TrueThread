@@ -239,10 +239,10 @@ CREATE INDEX idx_queries_user_id ON queries(user_id);
 CREATE INDEX idx_source_documents_query_id ON source_documents(query_id);
 CREATE INDEX idx_document_chunks_query_id ON document_chunks(query_id);
 
--- Vector similarity index (IVFFlat — good enough at small/medium scale)
-CREATE INDEX idx_document_chunks_embedding ON document_chunks
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-ALTER DATABASE postgres SET ivfflat.probes = 3;
+-- Vector similarity index (HNSW — high recall, works dynamically from 0 rows onwards)
+CREATE INDEX idx_document_chunks_embedding_hnsw ON document_chunks
+    USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+ALTER DATABASE postgres SET hnsw.ef_search = 40;
 ```
 
 ### 4.3 Example Retrieval Query (RAG step)

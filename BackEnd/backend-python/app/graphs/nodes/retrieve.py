@@ -113,7 +113,7 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
     retrieved_chunks: list[RetrievedChunk] = []
 
     async with async_session() as session:
-        await session.execute(text(f"SET ivfflat.probes = {settings.ivfflat_probes}"))
+        await session.execute(text(f"SET hnsw.ef_search = {settings.hnsw_ef_search}"))
         result = await session.execute(sql, params)
         rows = result.fetchall()
 

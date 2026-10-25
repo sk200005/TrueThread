@@ -177,7 +177,7 @@ async def run_pipeline(source_type: str, limit: Optional[int], dry_run: bool):
             logger.info("Committing to database...")
             await session.commit()
             
-            # 4. Update index statistics for IVFFlat
+            # 4. Update index statistics for query planner
             # ANALYZE must be run outside a transaction block
             logger.info("Running ANALYZE on document_chunks table...")
             async with engine.connect() as conn:

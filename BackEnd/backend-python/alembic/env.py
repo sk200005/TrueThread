@@ -7,7 +7,12 @@ migrations. Embedding column uses vector(384) for all-MiniLM-L6-v2.
 """
 
 import asyncio
+import os
+import sys
 from logging.config import fileConfig
+
+# Ensure app directory is on sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from alembic import context
 from sqlalchemy import pool
@@ -22,8 +27,8 @@ from app.models.source_document import DocumentChunk, SourceDocument  # noqa: F4
 
 config = context.config
 
-# Override the sqlalchemy.url with the runtime setting
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Override the sqlalchemy.url with the runtime setting (escape % for configparser interpolation)
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
