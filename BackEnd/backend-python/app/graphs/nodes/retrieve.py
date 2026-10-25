@@ -36,6 +36,14 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
     """
     LangGraph node: embed the user's query and find the most similar chunks.
 
+    When cross-encoder reranking is enabled (settings.reranker_enabled),
+    this node implements two-stage retrieval:
+        Stage 1: HNSW fetches top_k × multiplier candidate chunks (fast)
+        Stage 2: Cross-encoder reranks candidates → returns top_k (precise)
+
+    When reranking is disabled, behaviour is identical to the original
+    single-stage HNSW retrieval.
+
     Reads from state:
         - query (str): The user's natural-language question
         - query_id (str, optional): If provided, scopes search to chunks from this query only
@@ -50,7 +58,17 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
     query_id = state.get("query_id")           # Optional — scope to a specific ingestion run
     top_k = state.get("top_k", DEFAULT_TOP_K)
 
-    logger.info("RAG retrieve starting for query: %r (top_k=%d)", query_text, top_k)
+    # ── Determine fetch count ────────────────────────────────────────────
+    # When reranking is enabled, over-fetch candidates so the cross-encoder
+    # has a broader pool to reorder. Otherwise, fetch exactly top_k.
+    candidate_k = top_k
+    if settings.reranker_enabled:
+        candidate_k = top_k * settings.rerank_candidate_multiplier
+
+    logger.info(
+        "RAG retrieve starting for query: %r (top_k=%d, candidate_k=%d, reranker=%s)",
+        query_text, top_k, candidate_k, settings.reranker_enabled,
+    )
 
     # ── Step 1: Embed the query ──────────────────────────────────────────
     # We use the SAME local embedding model (all-MiniLM-L6-v2, 384 dims)
@@ -91,7 +109,7 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
         params = {
             "query_embedding": str(query_embedding),
             "query_id": query_id,
-            "top_k": top_k,
+            "top_k": candidate_k,
         }
     else:
         # Search across ALL chunks (useful for cross-query retrieval)
@@ -107,7 +125,7 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
         """)
         params = {
             "query_embedding": str(query_embedding),
-            "top_k": top_k,
+            "top_k": candidate_k,
         }
 
     retrieved_chunks: list[RetrievedChunk] = []
@@ -127,20 +145,35 @@ async def rag_retrieve(state: QueryState) -> dict[str, Any]:
             retrieved_chunks.append(chunk)
 
     logger.info(
-        "RAG retrieve complete: %d chunks returned (best similarity: %.4f)",
+        "HNSW retrieval complete: %d candidates returned (best similarity: %.4f)",
         len(retrieved_chunks),
         retrieved_chunks[0]["similarity"] if retrieved_chunks else 0.0,
     )
 
+    # ── Step 3: Cross-encoder reranking (optional) ───────────────────────
+    # If reranking is enabled, pass all candidates through the cross-encoder
+    # to reorder by precise relevance, then trim to top_k.
+    # If disabled or if reranking fails, the original HNSW order is preserved.
+    if settings.reranker_enabled and len(retrieved_chunks) > 0:
+        from app.ingestion.reranker import Reranker
+        reranker = Reranker()
+        retrieved_chunks = await reranker.rerank(
+            query=query_text,
+            chunks=retrieved_chunks,
+            top_k=top_k,
+        )
+
     # Log a preview of what was retrieved (helpful for debugging)
     for i, chunk in enumerate(retrieved_chunks[:3]):
         preview = chunk["chunk_text"][:100].replace("\n", " ")
+        rerank_info = f", rerank={chunk.get('rerank_score', 'n/a')}" if "rerank_score" in chunk else ""
         logger.info(
-            "  Chunk %d (sim=%.4f): %s...",
-            i + 1, chunk["similarity"], preview,
+            "  Chunk %d (sim=%.4f%s): %s...",
+            i + 1, chunk["similarity"], rerank_info, preview,
         )
 
     return {
         "retrieved_chunks": retrieved_chunks,
         "status": "retrieving",
     }
+

@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # Higher values increase recall at the cost of slight query latency.
     hnsw_ef_search: int = 40
 
+    # ── Cross-Encoder Reranker ────────────────────────────────────────────
+    # Two-stage retrieval: HNSW fetches a broad candidate pool, then a
+    # cross-encoder reranks them for precision.  ms-marco-MiniLM-L-6-v2
+    # is ~80 MB, adds ~20-30ms latency, and pairs well with all-MiniLM-L6-v2.
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_enabled: bool = True
+    # How many candidates to fetch before reranking (multiplied by top_k).
+    # e.g. top_k=5 with multiplier=3 → fetch 15 candidates, rerank to top 5.
+    rerank_candidate_multiplier: int = 3
+
     # Retained for backwards compatibility
     ivfflat_probes: int = 3
 
