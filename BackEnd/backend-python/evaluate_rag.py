@@ -183,6 +183,7 @@ def get_evaluator_llm(model_name: str = "gemini-3.1-flash-lite"):
         base_llm = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=gemini_key,
+            request_timeout=120,
         )
         llm = LangchainLLMWrapper(base_llm)
         print(f"Evaluator LLM: Google Gemini ({model_name})")
@@ -230,7 +231,7 @@ def get_evaluator_embeddings():
     return None
 
 
-def run_ragas_evaluation(dataset, llm, embeddings=None):
+def run_ragas_evaluation(dataset, llm, embeddings=None, max_workers: int = 3):
     """Run Ragas evaluate() with the four standard RAG metrics.
 
     Metrics:
@@ -254,11 +255,12 @@ def run_ragas_evaluation(dataset, llm, embeddings=None):
         AnswerRelevancy(llm=llm, embeddings=embeddings),
     ]
 
-    # RunConfig: be generous with timeouts & retries for free-tier LLMs
+    # RunConfig: throttle concurrency to stay comfortably within Gemini's 15 RPM free limit
     run_config = RunConfig(
-        timeout=180,
-        max_retries=5,
+        timeout=300,
+        max_retries=10,
         max_wait=120,
+        max_workers=max_workers,
     )
 
     print("\n" + "=" * 64)
@@ -455,6 +457,12 @@ def main():
         default=None,
         help="Limit number of test cases to evaluate (e.g. --max-cases 5).",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=3,
+        help="Max concurrent evaluation workers (default: 3, to respect Gemini free-tier 15 RPM).",
+    )
     args = parser.parse_args()
 
     # ── Step 1: Load test cases ──────────────────────────────────────────
@@ -474,7 +482,7 @@ def main():
     embeddings = get_evaluator_embeddings()
 
     # ── Step 5: Run Ragas evaluation ─────────────────────────────────────
-    ragas_result = run_ragas_evaluation(dataset, llm, embeddings)
+    ragas_result = run_ragas_evaluation(dataset, llm, embeddings, max_workers=args.workers)
 
     # ── Step 6: Print and save results ───────────────────────────────────
     try:

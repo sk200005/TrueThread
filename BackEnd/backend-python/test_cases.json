@@ -1,11 +1,11 @@
 [
 {
-"question": "Who is listed as the author of the November 4, 2024 source discussing LangChain and LangGraph?",
-"ground_truth": "The author is IBM Technology. "
+"question": "What is the main difference between LangChain and LangGraph?",
+"ground_truth": "LangChain is suitable for simple, deterministic tasks such as basic chatbots. LangGraph extends LangChain by providing stateful graph-based workflows with nodes, edges, conditional branching, loops, and state management for complex applications like research assistants."
 },
 {
-"question": "On what date was the IBM Technology source about LangChain and LangGraph published?",
-"ground_truth": "It was published on November 4, 2024. "
+"question": "How does state management work in LangGraph, and why is it useful?",
+"ground_truth": "LangGraph maintains a shared state throughout the workflow. Nodes can read existing state and update it, allowing information such as research topics, URLs, content, quality scores, and extracted facts to persist across steps. This supports memory, information accumulation, and coordinated execution across nodes."
 },
 {
 "question": "What is the primary focus of LangGraph according to the source?",

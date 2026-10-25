@@ -1,0 +1,7 @@
+question,answer,ground_truth,num_contexts,context_precision,context_recall,faithfulness,answer_relevancy
+What is the main difference between LangChain and LangGraph?,"Based on the provided context, the main differences between LangChain and LangGraph across several dimensions are:
+
+* **Primary Focus:** The primary focus of LangChain is to provide an abstraction lay...","LangChain is suitable for simple, deterministic tasks such as basic chatbots. LangGraph extends LangChain by providing stateful graph-based workflows with nodes, edges, conditional branching, loops, and state management for complex applications like research assistants.",5,0.2000,1.0000,1.0000,0.8809
+"How does state management work in LangGraph, and why is it useful?","Based on the provided context, state management in LangGraph works through a **state**, which is a shared data structure that acts as the application's persistent memory. It holds the current informat...","LangGraph maintains a shared state throughout the workflow. Nodes can read existing state and update it, allowing information such as research topics, URLs, content, quality scores, and extracted facts to persist across steps. This supports memory, information accumulation, and coordinated execution across nodes.",5,0.8056,1.0000,1.0000,0.9288
+
+AGGREGATE,,,,0.5028,1.0000,1.0000,0.9048

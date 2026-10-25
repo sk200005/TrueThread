@@ -26,3 +26,13 @@ Faithfulness: 0.88
 Answer Relevancy: 0.78
 Context Precision: 0.51
 Context Recall: 0.80
+
+
+================================================================
+  AGGREGATE EVALUATION SCORES
+================================================================
+  Context Precision     : 0.5793
+  Context Recall        : 1.0000
+  Faithfulness          : 0.9637
+  Answer Relevancy      : 0.8868
+================================================================
